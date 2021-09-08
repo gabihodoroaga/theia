@@ -26,6 +26,7 @@ import { CommandRegistry, CommandContribution } from '@theia/core/lib/common';
 import { KeybindingRegistry, KeybindingContribution } from '@theia/core/lib/browser';
 import { LanguageService } from '@theia/core/lib/browser/language-service';
 import { SUPPORTED_ENCODINGS } from '@theia/core/lib/browser/supported-encodings';
+import { nls } from '@theia/core/lib/browser/nls';
 
 @injectable()
 export class EditorContribution implements FrontendApplicationContribution, CommandContribution, KeybindingContribution {
@@ -95,7 +96,7 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
             alignment: StatusBarAlignment.RIGHT,
             priority: 1,
             command: EditorCommands.CHANGE_LANGUAGE.id,
-            tooltip: 'Select Language Mode'
+            tooltip: nls.localize('vscode/editorStatus/selectLanguageMode', 'Select Language Mode')
         });
     }
 
@@ -109,7 +110,7 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
             alignment: StatusBarAlignment.RIGHT,
             priority: 10,
             command: EditorCommands.CHANGE_ENCODING.id,
-            tooltip: 'Select Encoding'
+            tooltip: nls.localize('vscode/editorStatus/selectEncoding', 'Select Encoding')
         });
     }
 
@@ -120,10 +121,10 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
         }
         const { cursor } = editor;
         this.statusBar.setElement('editor-status-cursor-position', {
-            text: `Ln ${cursor.line + 1}, Col ${editor.getVisibleColumn(cursor)}`,
+            text: nls.localize('vscode/editorStatus/singleSelection', 'Ln {0}, Col {1}', (cursor.line + 1).toString(), editor.getVisibleColumn(cursor).toString()),
             alignment: StatusBarAlignment.RIGHT,
             priority: 100,
-            tooltip: 'Go To Line',
+            tooltip: nls.localize('vscode/editorStatus/gotoLine', 'Go To Line'),
             command: 'editor.action.gotoLine'
         });
     }
