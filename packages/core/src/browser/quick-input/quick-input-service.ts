@@ -117,6 +117,15 @@ export interface QuickPick<T extends QuickPickItem> extends QuickInput {
     canSelectMany: boolean;
     matchOnDescription: boolean;
     matchOnDetail: boolean;
+    matchOnLabel: boolean;
+    sortByLabel: boolean;
+    autoFocusOnList: boolean;
+    ok: boolean | 'default';
+    readonly onDidCustom: Event<void>;
+    customButton: boolean;
+    customLabel: string | undefined;
+    customHover: string | undefined;
+    buttons: ReadonlyArray<QuickInputButton>;
     readonly onDidAccept: Event<void>;
     readonly onDidChangeValue: Event<string>;
     readonly onDidTriggerButton: Event<QuickInputButton>;
@@ -130,10 +139,12 @@ export interface PickOptions<T extends QuickPickItem> {
     matchOnDescription?: boolean;
     matchOnDetail?: boolean;
     matchOnLabel?: boolean;
+    sortByLabel?: boolean;
     autoFocusOnList?: boolean;
     ignoreFocusLost?: boolean;
     canPickMany?: boolean;
     contextKey?: string;
+    ok?: boolean | 'default';
     activeItem?: Promise<T> | T;
     onDidFocus?: (entry: T) => void;
 }
@@ -180,7 +191,8 @@ export interface QuickPickOptions<T extends QuickPickItem> {
     hideCheckAll?: boolean;
     runIfSingle?: boolean
     contextKey?: string;
-    activeItem?: T,
+    activeItem?: T;
+    ok?: boolean | 'default';
     step?: number;
     totalSteps?: number;
 
@@ -210,6 +222,55 @@ export interface QuickInputService {
      * Provides raw access to the quick pick controller.
      */
     createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
+}
+
+export interface PickResourceOptions {
+    /**
+     * A human-readable string for the dialog title
+     */
+    title?: string;
+
+    /**
+     * The resource the dialog shows when opened.
+     */
+    defaultUri?: URI;
+
+    /**
+     * A human-readable string for the accept button.
+     */
+    label?: string;
+
+    /**
+     * Allow to select files, defaults to `true`.
+     */
+    canSelectFiles?: boolean;
+
+    /**
+     * Allow to select folders, defaults to `false`.
+     */
+    canSelectFolders?: boolean;
+
+    /**
+     * Allow to select many files or folders.
+     */
+    canSelectMany?: boolean;
+
+    /**
+     * A set of file filters that are used by the dialog. Each entry is a human readable label,
+     * like "TypeScript", and an array of extensions.
+     */
+    filters?: Record<string, string[]>;
+
+    /**
+     * Specifies a list of schemas for the file systems the user can load from. If not specified, uses the schema of the defaultURI or, if also not available,
+     * the schema of the current window.
+     */
+    availableFileSystems?: readonly string[];
+}
+
+export const QuickPickResourceService = Symbol('QuickPickResourceService');
+export interface QuickPickResourceService {
+    open(options?: PickResourceOptions): Promise<URI>;
 }
 
 /**
