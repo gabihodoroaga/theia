@@ -83,7 +83,7 @@ export class DebugConfigurationManager {
 
     protected initialized: Promise<void>;
 
-    protected dynamicDebugConfigurationsPerType: { type: string, configurations: DebugConfiguration[] }[];
+    protected dynamicDebugConfigurationsPerType?: { type: string, configurations: DebugConfiguration[] }[];
 
     @postConstruct()
     protected async init(): Promise<void> {
