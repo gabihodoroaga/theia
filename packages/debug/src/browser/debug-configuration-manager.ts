@@ -333,6 +333,8 @@ export class DebugConfigurationManager {
     async provideDynamicDebugConfigurations(): Promise<{ type: string, configurations: DebugConfiguration[] }[]> {
         await this.fireWillProvideDynamicDebugConfiguration();
         this.dynamicDebugConfigurationsPerType = await this.debug.provideDynamicDebugConfigurations!();
+        // Refreshing current dynamic configuration i.e. could be using a different option like "program"
+        this.updateCurrent(this.current);
         return this.dynamicDebugConfigurationsPerType;
     }
 
