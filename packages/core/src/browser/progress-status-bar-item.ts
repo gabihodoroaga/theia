@@ -15,7 +15,7 @@
  ********************************************************************************/
 
 import { injectable, inject } from 'inversify';
-import { CancellationToken } from '@codingame/monaco-jsonrpc';
+import { CancellationToken } from 'vscode-languageserver-protocol';
 import { ProgressClient } from '../common';
 import { ProgressMessage, ProgressUpdate } from '../common';
 import { StatusBar, StatusBarAlignment } from './status-bar';
