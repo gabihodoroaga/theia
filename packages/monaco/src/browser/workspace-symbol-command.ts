@@ -23,8 +23,7 @@ import {
     CommandRegistry, CommandHandler, Command, SelectionService, CancellationToken
 } from '@theia/core/lib/common';
 import { CommandContribution } from '@theia/core/lib/common';
-import { Range, Position, SymbolInformation } from '@theia/core/shared/vscode-languageserver-protocol';
-import { WorkspaceSymbolParams } from '@theia/core/shared/vscode-languageserver-protocol';
+import { Range, Position, SymbolInformation, WorkspaceSymbolParams } from '@theia/core/shared/vscode-languageserver-protocol';
 import { MonacoLanguages, WorkspaceSymbolProvider } from './monaco-languages';
 import URI from '@theia/core/lib/common/uri';
 

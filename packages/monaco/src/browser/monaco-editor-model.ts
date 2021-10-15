@@ -14,14 +14,12 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { Position } from '@theia/core/shared/vscode-languageserver-protocol';
-import { TextDocumentSaveReason, TextDocumentContentChangeEvent } from '@theia/core/shared/vscode-languageserver-protocol';
+import { Position, Range, TextDocumentSaveReason, TextDocumentContentChangeEvent } from '@theia/core/shared/vscode-languageserver-protocol';
 import { TextEditorDocument, EncodingMode, FindMatchesOptions, FindMatch, EditorPreferences, DEFAULT_WORD_SEPARATORS } from '@theia/editor/lib/browser';
 import { DisposableCollection, Disposable } from '@theia/core/lib/common/disposable';
 import { Emitter, Event } from '@theia/core/lib/common/event';
 import { CancellationTokenSource, CancellationToken } from '@theia/core/lib/common/cancellation';
 import { Resource, ResourceError, ResourceVersion } from '@theia/core/lib/common/resource';
-import { Range } from '@theia/core/shared/vscode-languageserver-protocol';
 import { Saveable, SaveOptions } from '@theia/core/lib/browser/saveable';
 import { MonacoToProtocolConverter } from './monaco-to-protocol-converter';
 import { ProtocolToMonacoConverter } from './protocol-to-monaco-converter';
