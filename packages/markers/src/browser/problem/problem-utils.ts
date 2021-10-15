@@ -15,7 +15,7 @@
  ********************************************************************************/
 
 import { Marker } from '../../common/marker';
-import { Diagnostic } from '@theia/core/shared/vscode-languageserver-types';
+import { Diagnostic } from '@theia/core/shared/vscode-languageserver-protocol';
 
 export namespace ProblemUtils {
 
@@ -51,6 +51,6 @@ export namespace ProblemUtils {
      * @param a the first marker for comparison.
      * @param b the second marker for comparison.
      */
-     export const ownerCompare = (a: Marker<Diagnostic>, b: Marker<Diagnostic>): number => a.owner.localeCompare(b.owner);
+    export const ownerCompare = (a: Marker<Diagnostic>, b: Marker<Diagnostic>): number => a.owner.localeCompare(b.owner);
 
 }
