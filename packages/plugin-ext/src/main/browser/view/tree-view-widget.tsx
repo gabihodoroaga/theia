@@ -16,7 +16,7 @@
 
 import { URI } from '@theia/core/shared/vscode-uri';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
-import { TreeViewsExt, TreeViewSelection } from '../../../common/plugin-api-rpc';
+import { TreeViewsExt, TreeViewItemCollapsibleState, TreeViewItem, TreeViewSelection } from '../../../common/plugin-api-rpc';
 import { Command } from '../../../common/plugin-api-rpc-model';
 import {
     TreeNode,
@@ -33,7 +33,6 @@ import {
     TooltipService,
     TooltipAttributes
 } from '@theia/core/lib/browser';
-import { TreeViewItem, TreeViewItemCollapsibleState } from '../../../common/plugin-api-rpc';
 import { MenuPath, MenuModelRegistry, ActionMenuNode } from '@theia/core/lib/common/menu';
 import * as React from '@theia/core/shared/react';
 import { PluginSharedStyle } from '../plugin-shared-style';
@@ -320,43 +319,11 @@ export class TreeViewWidget extends TreeViewWelcomeWidget {
         } else if (!highlight) {
             children.push(caption);
         }
-        return React.createElement('div', attrs, ...children);
-    }
-
-    protected getCaption(node: TreeNode): React.ReactNode {
-        const nodes: React.ReactNode[] = [];
-
-        const name = this.toNodeName(node) || '';
         const description = this.toNodeDescription(node);
-
-        let work = name;
-
-        const regex = /\[([^\[]+)\]\(([^\)]+)\)/g;
-        const matchResult = work.match(regex);
-
-        if (matchResult) {
-            matchResult.forEach((match, index) => {
-                nodes.push(<span key={`m${index}`}>{work.substring(0, work.indexOf(match))}</span>);
-
-                const execResult = regex.exec(name);
-                nodes.push(<a key={`l${index}`}
-                    href={execResult![2]}
-                    target='_blank'
-                    className={TREE_NODE_HYPERLINK}
-                    onClick={e => e.stopPropagation()}>{execResult![1]}</a>
-                );
-
-                work = work.substring(work.indexOf(match) + match.length);
-            });
+        if (description) {
+            children.push(<span className='theia-tree-view-description'>{description}</span>);
         }
-
-        return <div className='noWrapInfoTree'>
-            {...nodes}
-            {work && <span>{work}</span>}
-            {description && <span className='theia-tree-view-description'>
-                {description}
-            </span>}
-        </div>;
+        return React.createElement('div', attrs, ...children);
     }
 
     protected renderTailDecorations(node: TreeViewNode, props: NodeProps): React.ReactNode {

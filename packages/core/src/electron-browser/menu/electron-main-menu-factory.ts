@@ -73,7 +73,7 @@ export class ElectronMainMenuFactory extends BrowserMainMenuFactory {
                 }
                 if (this._menu) {
                     for (const item of this._toggledCommands) {
-                        this._menu.getMenuItemById(item).checked = this.commandRegistry.isToggled(item);
+                        this._menu.getMenuItemById(item)!.checked = this.commandRegistry.isToggled(item);
                     }
                     electron.remote.getCurrentWindow().setMenu(this._menu);
                 }
@@ -279,7 +279,7 @@ export class ElectronMainMenuFactory extends BrowserMainMenuFactory {
             if (this.commandRegistry.isEnabled(command, ...args)) {
                 await this.commandRegistry.executeCommand(command, ...args);
                 if (this._menu && this.commandRegistry.isVisible(command, ...args)) {
-                    this._menu.getMenuItemById(command).checked = this.commandRegistry.isToggled(command, ...args);
+                    this._menu.getMenuItemById(command)!.checked = this.commandRegistry.isToggled(command, ...args);
                     electron.remote.getCurrentWindow().setMenu(this._menu);
                 }
             }

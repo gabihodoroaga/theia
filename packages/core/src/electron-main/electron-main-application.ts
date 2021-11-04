@@ -30,10 +30,9 @@ import { ContributionProvider } from '../common/contribution-provider';
 import { ElectronSecurityTokenService } from './electron-security-token-service';
 import { ElectronSecurityToken } from '../electron-common/electron-token';
 import Storage = require('electron-store');
-// eslint-disable-next-line @theia/runtime-import-check
-import { DEFAULT_WINDOW_HASH } from '../browser/window/window-service';
 import { isOSX, isWindows } from '../common';
 import { RequestTitleBarStyle, Restart, TitleBarStyleAtStartup, TitleBarStyleChanged } from '../electron-common/messaging/electron-messages';
+import { DEFAULT_WINDOW_HASH } from '../common/window';
 
 const createYargs: (argv?: string[], cwd?: string) => Argv = require('yargs/yargs');
 
@@ -516,7 +515,7 @@ export class ElectronMainApplication {
 
         ipcMain.on(TitleBarStyleChanged, ({ sender }, titleBarStyle: string) => {
             this.useNativeWindowFrame = titleBarStyle === 'native';
-            this.saveWindowState(BrowserWindow.fromId(sender.id));
+            this.saveWindowState(BrowserWindow.fromId(sender.id)!);
         });
 
         ipcMain.on(Restart, ({ sender }) => {
@@ -551,7 +550,7 @@ export class ElectronMainApplication {
 
     protected restart(id: number): void {
         this.restarting = true;
-        const window = BrowserWindow.fromId(id);
+        const window = BrowserWindow.fromId(id)!;
         window.on('closed', async () => {
             await this.launch({
                 secondInstance: false,
