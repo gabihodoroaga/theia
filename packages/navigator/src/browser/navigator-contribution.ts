@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017-2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017-2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
@@ -22,18 +22,17 @@ import {
     FrontendApplication,
     FrontendApplicationContribution,
     KeybindingRegistry,
-    Navigatable,
     OpenerService,
     PreferenceScope,
     PreferenceService,
     SelectableTreeNode,
-    SHELL_TABBAR_CONTEXT_MENU,
     Widget,
     NavigatableWidget,
     ApplicationShell,
     TabBar,
     Title,
-    codicon
+    codicon,
+    SHELL_TABBAR_CONTEXT_MENU
 } from '@theia/core/lib/browser';
 import { FileDownloadCommands } from '@theia/filesystem/lib/browser/download/file-download-command-contribution';
 import {
@@ -44,7 +43,6 @@ import {
     MenuModelRegistry,
     MenuPath,
     Mutable,
-    isWindows
 } from '@theia/core/lib/common';
 import {
     DidCreateNewResourceEvent,
@@ -67,17 +65,16 @@ import {
 } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { FileSystemCommands } from '@theia/filesystem/lib/browser/filesystem-frontend-contribution';
 import { NavigatorDiff, NavigatorDiffCommands } from './navigator-diff';
-import { UriSelection } from '@theia/core/lib/common/selection';
 import { DirNode, FileNode } from '@theia/filesystem/lib/browser';
 import { FileNavigatorModel } from './navigator-model';
 import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 import { SelectionService } from '@theia/core/lib/common/selection-service';
-import { UriAwareCommandHandler } from '@theia/core/lib/common/uri-command-handler';
-import URI from '@theia/core/lib/common/uri';
 import { OpenEditorsWidget } from './open-editors-widget/navigator-open-editors-widget';
 import { OpenEditorsContextMenu } from './open-editors-widget/navigator-open-editors-menus';
 import { OpenEditorsCommands } from './open-editors-widget/navigator-open-editors-commands';
 import { nls } from '@theia/core/lib/common/nls';
+import URI from '@theia/core/lib/common/uri';
+import { UriAwareCommandHandler } from '@theia/core/lib/common/uri-command-handler';
 
 export namespace FileNavigatorCommands {
     export const REVEAL_IN_NAVIGATOR = Command.toLocalizedCommand({
@@ -99,29 +96,29 @@ export namespace FileNavigatorCommands {
         label: 'Refresh in Explorer',
         iconClass: codicon('refresh')
     }, 'theia/navigator/refresh', CommonCommands.FILE_CATEGORY_KEY);
-    export const COLLAPSE_ALL = Command.toLocalizedCommand({
+    export const COLLAPSE_ALL = Command.toDefaultLocalizedCommand({
         id: 'navigator.collapse.all',
         category: CommonCommands.FILE_CATEGORY,
         label: 'Collapse Folders in Explorer',
         iconClass: codicon('collapse-all')
-    }, 'vscode/explorerView/collapseExplorerFolders', CommonCommands.FILE_CATEGORY_KEY);
+    });
     export const ADD_ROOT_FOLDER: Command = {
         id: 'navigator.addRootFolder'
     };
-    export const FOCUS = Command.toLocalizedCommand({
+    export const FOCUS = Command.toDefaultLocalizedCommand({
         id: 'workbench.files.action.focusFilesExplorer',
         category: CommonCommands.FILE_CATEGORY,
         label: 'Focus on Files Explorer'
-    }, 'vscode/fileActions/focusFilesExplorer', CommonCommands.FILE_CATEGORY_KEY);
-    export const COPY_RELATIVE_FILE_PATH = Command.toLocalizedCommand({
-        id: 'navigator.copyRelativeFilePath',
-        label: 'Copy Relative Path'
-    }, 'vscode/fileActions.contribution/copyRelativePath');
-    export const OPEN = Command.toLocalizedCommand({
+    });
+    export const OPEN = Command.toDefaultLocalizedCommand({
         id: 'navigator.open',
         category: CommonCommands.FILE_CATEGORY,
         label: 'Open'
-    }, 'vscode/dialogMainService/open', CommonCommands.FILE_CATEGORY_KEY);
+    });
+    /**
+     * @deprecated since 1.21.0. Use WorkspaceCommands.COPY_RELATIVE_FILE_COMMAND instead.
+     */
+    export const COPY_RELATIVE_FILE_PATH = WorkspaceCommands.COPY_RELATIVE_FILE_PATH;
 }
 
 /**
@@ -135,6 +132,7 @@ export namespace NavigatorMoreToolbarGroups {
 }
 
 export const NAVIGATOR_CONTEXT_MENU: MenuPath = ['navigator-context-menu'];
+export const SHELL_TABBAR_CONTEXT_REVEAL: MenuPath = [...SHELL_TABBAR_CONTEXT_MENU, '2_reveal'];
 
 /**
  * Navigator context menu default groups should be aligned
@@ -220,7 +218,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
     @postConstruct()
     protected async init(): Promise<void> {
         await this.fileNavigatorPreferences.ready;
-        this.shell.currentChanged.connect(() => this.onCurrentWidgetChangedHandler());
+        this.shell.onDidChangeCurrentWidget(() => this.onCurrentWidgetChangedHandler());
 
         const updateFocusContextKeys = () => {
             const hasFocus = this.shell.activeWidget instanceof FileNavigatorWidget;
@@ -228,7 +226,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             this.contextKeyService.filesExplorerFocus.set(hasFocus);
         };
         updateFocusContextKeys();
-        this.shell.activeChanged.connect(updateFocusContextKeys);
+        this.shell.onDidChangeActiveWidget(updateFocusContextKeys);
         this.workspaceCommandContribution.onDidCreateNewFile(async event => this.onDidCreateNewResource(event));
         this.workspaceCommandContribution.onDidCreateNewFolder(async event => this.onDidCreateNewResource(event));
     }
@@ -267,25 +265,20 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
         await this.openView();
     }
 
-    registerCommands(registry: CommandRegistry): void {
+    override registerCommands(registry: CommandRegistry): void {
         super.registerCommands(registry);
         registry.registerCommand(FileNavigatorCommands.FOCUS, {
             execute: () => this.openView({ activate: true })
         });
-        registry.registerCommand(FileNavigatorCommands.REVEAL_IN_NAVIGATOR, {
-            execute: (event?: Event) => {
-                const widget = this.shell.findTargetedWidget(event);
-                this.openView({ activate: true }).then(() => this.selectWidgetFileNode(widget || this.shell.currentWidget));
+        registry.registerCommand(FileNavigatorCommands.REVEAL_IN_NAVIGATOR, UriAwareCommandHandler.MonoSelect(this.selectionService, {
+            execute: async uri => {
+                if (await this.selectFileNode(uri)) {
+                    this.openView({ activate: false, reveal: true });
+                }
             },
-            isEnabled: (event?: Event) => {
-                const widget = this.shell.findTargetedWidget(event);
-                return widget ? Navigatable.is(widget) : Navigatable.is(this.shell.currentWidget);
-            },
-            isVisible: (event?: Event) => {
-                const widget = this.shell.findTargetedWidget(event);
-                return widget ? Navigatable.is(widget) : Navigatable.is(this.shell.currentWidget);
-            }
-        });
+            isEnabled: uri => !!this.workspaceService.getWorkspaceRootUri(uri),
+            isVisible: uri => !!this.workspaceService.getWorkspaceRootUri(uri),
+        }));
         registry.registerCommand(FileNavigatorCommands.TOGGLE_HIDDEN_FILES, {
             execute: () => {
                 this.fileNavigatorFilter.toggleHiddenFiles();
@@ -323,9 +316,10 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
                     return false;
                 }
                 const navigator = this.tryGetWidget();
-                const model = navigator && navigator.model;
-                const uris = UriSelection.getUris(model && model.selectedNodes);
-                return this.workspaceService.areWorkspaceRoots(uris);
+                const selection = navigator?.model.selectedNodes[0];
+                // The node that is selected when the user clicks in empty space.
+                const root = navigator?.getContainerTreeNode();
+                return selection === root;
             }
         });
 
@@ -343,20 +337,6 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             isEnabled: () => this.navigatorDiff.isFirstFileSelected,
             isVisible: () => this.navigatorDiff.isFirstFileSelected
         });
-        registry.registerCommand(FileNavigatorCommands.COPY_RELATIVE_FILE_PATH, UriAwareCommandHandler.MultiSelect(this.selectionService, {
-            isEnabled: uris => !!uris.length,
-            isVisible: uris => !!uris.length,
-            execute: async uris => {
-                const lineDelimiter = isWindows ? '\r\n' : '\n';
-                const text = uris.map((uri: URI) => {
-                    const workspaceRoot = this.workspaceService.getWorkspaceRootUri(uri);
-                    if (workspaceRoot) {
-                        return workspaceRoot.relative(uri);
-                    }
-                }).join(lineDelimiter);
-                await this.clipboardService.writeText(text);
-            }
-        }));
         registry.registerCommand(FileNavigatorCommands.OPEN, {
             isEnabled: () => this.getSelectedFileNodes().length > 0,
             isVisible: () => this.getSelectedFileNodes().length > 0,
@@ -368,7 +348,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             }
         });
         registry.registerCommand(OpenEditorsCommands.CLOSE_ALL_TABS_FROM_TOOLBAR, {
-            execute: widget => this.withOpenEditorsWidget(widget, () => this.editorWidgets.forEach(editor => editor.close())),
+            execute: widget => this.withOpenEditorsWidget(widget, () => this.shell.closeMany(this.editorWidgets)),
             isEnabled: widget => this.withOpenEditorsWidget(widget, () => !!this.editorWidgets.length),
             isVisible: widget => this.withOpenEditorsWidget(widget, () => !!this.editorWidgets.length)
         });
@@ -419,9 +399,9 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
         return false;
     }
 
-    registerMenus(registry: MenuModelRegistry): void {
+    override registerMenus(registry: MenuModelRegistry): void {
         super.registerMenus(registry);
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_REVEAL, {
             commandId: FileNavigatorCommands.REVEAL_IN_NAVIGATOR.id,
             label: FileNavigatorCommands.REVEAL_IN_NAVIGATOR.label,
             order: '5'
@@ -431,7 +411,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             commandId: FileNavigatorCommands.OPEN.id,
             label: FileNavigatorCommands.OPEN.label
         });
-        registry.registerSubmenu(NavigatorContextMenu.OPEN_WITH, nls.localize('vscode/fileActions.contribution/explorerOpenWith', 'Open With...'));
+        registry.registerSubmenu(NavigatorContextMenu.OPEN_WITH, nls.localizeByDefault('Open With...'));
         this.openerService.getOpeners().then(openers => {
             for (const opener of openers) {
                 const openWithCommand = WorkspaceCommands.FILE_OPEN_WITH(opener);
@@ -460,8 +440,8 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             order: 'c'
         });
         registry.registerMenuAction(NavigatorContextMenu.CLIPBOARD, {
-            commandId: FileNavigatorCommands.COPY_RELATIVE_FILE_PATH.id,
-            label: FileNavigatorCommands.COPY_RELATIVE_FILE_PATH.label,
+            commandId: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id,
+            label: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.label,
             order: 'd'
         });
         registry.registerMenuAction(NavigatorContextMenu.CLIPBOARD, {
@@ -500,7 +480,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
         });
         registry.registerMenuAction(NavigatorContextMenu.MODIFICATION, {
             commandId: FileNavigatorCommands.COLLAPSE_ALL.id,
-            label: nls.localize('vscode/treeView/collapseAll', 'Collapse All'),
+            label: nls.localizeByDefault('Collapse All'),
             order: 'z2'
         });
 
@@ -519,7 +499,7 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             order: 'a'
         });
         registry.registerMenuAction(OpenEditorsContextMenu.CLIPBOARD, {
-            commandId: FileNavigatorCommands.COPY_RELATIVE_FILE_PATH.id,
+            commandId: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id,
             order: 'b'
         });
         registry.registerMenuAction(OpenEditorsContextMenu.SAVE, {
@@ -538,22 +518,22 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
 
         registry.registerMenuAction(OpenEditorsContextMenu.MODIFICATION, {
             commandId: CommonCommands.CLOSE_TAB.id,
-            label: 'Close',
+            label: nls.localizeByDefault('Close'),
             order: 'a'
         });
         registry.registerMenuAction(OpenEditorsContextMenu.MODIFICATION, {
             commandId: CommonCommands.CLOSE_OTHER_TABS.id,
-            label: 'Close Others',
+            label: nls.localizeByDefault('Close Others'),
             order: 'b'
         });
         registry.registerMenuAction(OpenEditorsContextMenu.MODIFICATION, {
             commandId: CommonCommands.CLOSE_ALL_MAIN_TABS.id,
-            label: 'Close All',
+            label: nls.localizeByDefault('Close All'),
             order: 'c'
         });
     }
 
-    registerKeybindings(registry: KeybindingRegistry): void {
+    override registerKeybindings(registry: KeybindingRegistry): void {
         super.registerKeybindings(registry);
         registry.registerKeybinding({
             command: FileNavigatorCommands.REVEAL_IN_NAVIGATOR.id,
@@ -577,25 +557,19 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
             keybinding: 'ctrlcmd+i',
             context: NavigatorKeybindingContexts.navigatorActive
         });
-
-        registry.registerKeybinding({
-            command: FileNavigatorCommands.COPY_RELATIVE_FILE_PATH.id,
-            keybinding: isWindows ? 'ctrl+k ctrl+shift+c' : 'ctrlcmd+shift+alt+c',
-            when: '!editorFocus'
-        });
     }
 
     async registerToolbarItems(toolbarRegistry: TabBarToolbarRegistry): Promise<void> {
         toolbarRegistry.registerItem({
             id: FileNavigatorCommands.REFRESH_NAVIGATOR.id,
             command: FileNavigatorCommands.REFRESH_NAVIGATOR.id,
-            tooltip: nls.localize('vscode/explorerView/refreshExplorer', 'Refresh Explorer'),
+            tooltip: nls.localizeByDefault('Refresh Explorer'),
             priority: 0,
         });
         toolbarRegistry.registerItem({
             id: FileNavigatorCommands.COLLAPSE_ALL.id,
             command: FileNavigatorCommands.COLLAPSE_ALL.id,
-            tooltip: nls.localize('vscode/treeView/collapseAll', 'Collapse All'),
+            tooltip: nls.localizeByDefault('Collapse All'),
             priority: 1,
         });
         this.registerMoreToolbarItem({
@@ -664,17 +638,20 @@ export class FileNavigatorContribution extends AbstractViewContribution<FileNavi
      *
      * @param widget widget file resource of which should be revealed and selected
      */
-    async selectWidgetFileNode(widget: Widget | undefined): Promise<void> {
-        if (Navigatable.is(widget)) {
-            const resourceUri = widget.getResourceUri();
-            if (resourceUri) {
-                const { model } = await this.widget;
-                const node = await model.revealFile(resourceUri);
-                if (SelectableTreeNode.is(node)) {
-                    model.selectNode(node);
-                }
+    async selectWidgetFileNode(widget: Widget | undefined): Promise<boolean> {
+        return this.selectFileNode(NavigatableWidget.getUri(widget));
+    }
+
+    async selectFileNode(uri?: URI): Promise<boolean> {
+        if (uri) {
+            const { model } = await this.widget;
+            const node = await model.revealFile(uri);
+            if (SelectableTreeNode.is(node)) {
+                model.selectNode(node);
+                return true;
             }
         }
+        return false;
     }
 
     protected onCurrentWidgetChangedHandler(): void {

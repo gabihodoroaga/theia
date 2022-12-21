@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -34,12 +34,13 @@ import debounce = require('p-debounce');
 import URI from '@theia/core/lib/common/uri';
 import { BreakpointManager } from './breakpoint/breakpoint-manager';
 import { DebugSessionOptions, InternalDebugSessionOptions } from './debug-session-options';
-import { DebugConfiguration } from '../common/debug-common';
+import { DebugConfiguration, DebugConsoleMode } from '../common/debug-common';
 import { SourceBreakpoint, ExceptionBreakpoint } from './breakpoint/breakpoint-marker';
 import { TerminalWidgetOptions, TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { DebugFunctionBreakpoint } from './model/debug-function-breakpoint';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { DebugContribution } from './debug-contribution';
+import { waitForEvent } from '@theia/core/lib/common/promise-util';
 
 export enum DebugState {
     Inactive,
@@ -63,8 +64,9 @@ export class DebugSession implements CompositeTreeElement {
     }
 
     protected readonly childSessions = new Map<string, DebugSession>();
-
     protected readonly toDispose = new DisposableCollection();
+
+    private isStopping: boolean = false;
 
     constructor(
         readonly id: string,
@@ -80,6 +82,9 @@ export class DebugSession implements CompositeTreeElement {
         protected readonly debugContributionProvider: ContributionProvider<DebugContribution>
     ) {
         this.connection.onRequest('runInTerminal', (request: DebugProtocol.RunInTerminalRequest) => this.runInTerminal(request));
+        this.connection.onDidClose(() => {
+            this.toDispose.dispose();
+        });
         this.registerDebugContributions(options.configuration.type, this.connection);
 
         if (parentSession) {
@@ -88,6 +93,7 @@ export class DebugSession implements CompositeTreeElement {
                 this.parentSession?.childSessions?.delete(id);
             }));
         }
+        this.connection.onDidClose(() => this.toDispose.dispose());
         this.toDispose.pushAll([
             this.onDidChangeEmitter,
             this.onDidChangeBreakpointsEmitter,
@@ -96,19 +102,18 @@ export class DebugSession implements CompositeTreeElement {
                 this.doUpdateThreads([]);
             }),
             this.connection,
-            this.on('initialized', () => this.configure()),
-            this.on('breakpoint', ({ body }) => this.updateBreakpoint(body)),
-            this.on('continued', e => this.handleContinued(e)),
-            this.on('stopped', e => this.handleStopped(e)),
-            this.on('thread', e => this.handleThread(e)),
-            this.on('terminated', () => this.terminated = true),
-            this.on('capabilities', event => this.updateCapabilities(event.body.capabilities)),
+            this.connection.on('initialized', () => this.configure()),
+            this.connection.on('breakpoint', ({ body }) => this.updateBreakpoint(body)),
+            this.connection.on('continued', e => this.handleContinued(e)),
+            this.connection.on('stopped', e => this.handleStopped(e)),
+            this.connection.on('thread', e => this.handleThread(e)),
+            this.connection.on('capabilities', event => this.updateCapabilities(event.body.capabilities)),
             this.breakpoints.onDidChangeMarkers(uri => this.updateBreakpoints({ uri, sourceModified: true }))
         ]);
     }
 
-    dispose(): void {
-        this.toDispose.dispose();
+    get onDispose(): Event<void> {
+        return this.toDispose.onDispose;
     }
 
     get configuration(): DebugConfiguration {
@@ -278,8 +283,7 @@ export class DebugSession implements CompositeTreeElement {
         try {
             await this.sendRequest((this.configuration.request as keyof DebugRequestTypes), this.configuration);
         } catch (reason) {
-            this.fireExited(reason);
-            await this.messages.showMessage({
+            this.messages.showMessage({
                 type: MessageType.Error,
                 text: reason.message || 'Debug session initialization failed. See console for details.',
                 options: {
@@ -308,59 +312,48 @@ export class DebugSession implements CompositeTreeElement {
         await this.updateThreads(undefined);
     }
 
-    protected terminated = false;
-    async terminate(restart?: boolean): Promise<void> {
-        if (!this.terminated && this.capabilities.supportsTerminateRequest && this.configuration.request === 'launch') {
-            this.terminated = true;
-            await this.connection.sendRequest('terminate', { restart });
-            if (!await this.exited(1000)) {
-                await this.disconnect(restart);
-            }
-        } else {
-            await this.disconnect(restart);
-        }
+    canTerminate(): boolean {
+        return !!this.capabilities.supportsTerminateRequest;
     }
 
-    protected async disconnect(restart?: boolean): Promise<void> {
-        const TIMEOUT_MS = 1000;
-        Promise.race([
-            this.sendRequest('disconnect', { restart }),
-            new Promise(reject => setTimeout(reject, TIMEOUT_MS, new Error('TIMEOUT_ERR')))
-        ]).then(res => {
-            if (res instanceof Error) {
-                this.fireExited(res);
-            }
-        }).catch(() => this.fireExited());
+    canRestart(): boolean {
+        return !!this.capabilities.supportsRestartRequest;
     }
 
-    protected fireExited(reason?: Error): void {
-        try {
-            this.connection['fire']('exited', { reason });
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    protected exited(timeout: number): Promise<boolean> {
-        return new Promise<boolean>(resolve => {
-            const listener = this.on('exited', () => {
-                listener.dispose();
-                resolve(true);
-            });
-            setTimeout(() => {
-                listener.dispose();
-                resolve(false);
-            }, timeout);
-        });
-    }
-
-    async restart(): Promise<boolean> {
-        if (this.capabilities.supportsRestartRequest) {
-            this.terminated = false;
+    async restart(): Promise<void> {
+        if (this.canRestart()) {
             await this.sendRequest('restart', {});
-            return true;
         }
-        return false;
+    }
+
+    async stop(isRestart: boolean, callback: () => void): Promise<void> {
+        if (!this.isStopping) {
+            this.isStopping = true;
+            if (this.canTerminate()) {
+                const terminated = this.waitFor('terminated', 5000);
+                try {
+                    await this.connection.sendRequest('terminate', { restart: isRestart }, 5000);
+                    await terminated;
+                } catch (e) {
+                    console.error('Did not receive terminated event in time', e);
+                }
+            } else {
+                try {
+                    await this.sendRequest('disconnect', { restart: isRestart }, 5000);
+                } catch (e) {
+                    console.error('Error on disconnect', e);
+                }
+            }
+            callback();
+        }
+    }
+
+    async disconnect(isRestart: boolean, callback: () => void): Promise<void> {
+        if (!this.isStopping) {
+            this.isStopping = true;
+            await this.sendRequest('disconnect', { restart: isRestart });
+            callback();
+        }
     }
 
     async completions(text: string, column: number, line: number): Promise<DebugProtocol.CompletionItem[]> {
@@ -375,8 +368,8 @@ export class DebugSession implements CompositeTreeElement {
         return response.body;
     }
 
-    sendRequest<K extends keyof DebugRequestTypes>(command: K, args: DebugRequestTypes[K][0]): Promise<DebugRequestTypes[K][1]> {
-        return this.connection.sendRequest(command, args);
+    sendRequest<K extends keyof DebugRequestTypes>(command: K, args: DebugRequestTypes[K][0], timeout?: number): Promise<DebugRequestTypes[K][1]> {
+        return this.connection.sendRequest(command, args, timeout);
     }
 
     sendCustomRequest<T extends DebugProtocol.Response>(command: string, args?: any): Promise<T> {
@@ -385,6 +378,10 @@ export class DebugSession implements CompositeTreeElement {
 
     on<K extends keyof DebugEventTypes>(kind: K, listener: (e: DebugEventTypes[K]) => any): Disposable {
         return this.connection.on(kind, listener);
+    }
+
+    waitFor<K extends keyof DebugEventTypes>(kind: K, ms: number): Promise<void> {
+        return waitForEvent(this.connection.onEvent(kind), ms).then();
     }
 
     get onDidCustomEvent(): Event<DebugProtocol.Event> {
@@ -820,4 +817,19 @@ export class DebugSession implements CompositeTreeElement {
             contrib.register(configType, connection);
         }
     };
+
+    /**
+     * Returns the top-most parent session that is responsible for the console. If this session uses a {@link DebugConsoleMode.Separate separate console}
+     * or does not have any parent session, undefined is returned.
+     */
+    public findConsoleParent(): DebugSession | undefined {
+        if (this.configuration.consoleMode !== DebugConsoleMode.MergeWithParent) {
+            return undefined;
+        }
+        let debugSession: DebugSession | undefined = this;
+        do {
+            debugSession = this.parentSession;
+        } while (debugSession?.parentSession && debugSession.configuration.consoleMode === DebugConsoleMode.MergeWithParent);
+        return debugSession;
+    }
 }

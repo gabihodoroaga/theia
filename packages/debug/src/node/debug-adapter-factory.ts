@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -32,16 +32,15 @@ import {
 } from '@theia/process/lib/node';
 import {
     DebugAdapterExecutable,
-    CommunicationProvider,
     DebugAdapterSession,
     DebugAdapterSessionFactory,
     DebugAdapterFactory,
-    DebugAdapterForkExecutable
+    DebugAdapterForkExecutable,
+    DebugAdapter
 } from './debug-model';
 import { DebugAdapterSessionImpl } from './debug-adapter-session';
 import { environment } from '@theia/core/shared/@theia/application-package';
-import { StreamCommunicationProvider } from './stream-communication-provider';
-import { Disposable } from '@theia/core/lib/common/disposable';
+import { ProcessDebugAdapter, SocketDebugAdapter } from './stream-debug-adapter';
 
 /**
  * [DebugAdapterFactory](#DebugAdapterFactory) implementation based on
@@ -54,12 +53,15 @@ export class LaunchBasedDebugAdapterFactory implements DebugAdapterFactory {
     @inject(ProcessManager)
     protected readonly processManager: ProcessManager;
 
-    start(executable: DebugAdapterExecutable): CommunicationProvider {
+    start(executable: DebugAdapterExecutable): DebugAdapter {
         const process = this.childProcess(executable);
 
+        if (!process.process) {
+            throw new Error(`Could not start debug adapter process: ${JSON.stringify(executable)}`);
+        }
+
         // FIXME: propagate onError + onExit
-        const provider = new StreamCommunicationProvider(process.outputStream, process.inputStream);
-        provider.push(Disposable.create(() => process.kill()));
+        const provider = new ProcessDebugAdapter(process.process);
         return provider;
     }
 
@@ -81,12 +83,11 @@ export class LaunchBasedDebugAdapterFactory implements DebugAdapterFactory {
         return this.processFactory(processOptions);
     }
 
-    connect(debugServerPort: number): CommunicationProvider {
+    connect(debugServerPort: number): DebugAdapter {
         const socket = net.createConnection(debugServerPort);
         // FIXME: propagate socket.on('error', ...) + socket.on('close', ...)
 
-        const provider = new StreamCommunicationProvider(socket, socket);
-        provider.push(Disposable.create(() => socket.end()));
+        const provider = new SocketDebugAdapter(socket);
         return provider;
     }
 }
@@ -97,10 +98,10 @@ export class LaunchBasedDebugAdapterFactory implements DebugAdapterFactory {
 @injectable()
 export class DebugAdapterSessionFactoryImpl implements DebugAdapterSessionFactory {
 
-    get(sessionId: string, communicationProvider: CommunicationProvider): DebugAdapterSession {
+    get(sessionId: string, debugAdapter: DebugAdapter): DebugAdapterSession {
         return new DebugAdapterSessionImpl(
             sessionId,
-            communicationProvider
+            debugAdapter
         );
     }
 }

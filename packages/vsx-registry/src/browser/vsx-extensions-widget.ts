@@ -1,20 +1,21 @@
-/********************************************************************************
- * Copyright (C) 2020 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, interfaces, postConstruct, inject } from '@theia/core/shared/inversify';
+import { TreeNode } from '@theia/core/lib/browser';
 import { SourceTreeWidget } from '@theia/core/lib/browser/source-tree';
 import { VSXExtensionsSource, VSXExtensionsSourceOptions } from './vsx-extensions-source';
 import { nls } from '@theia/core/lib/common/nls';
@@ -51,7 +52,7 @@ export class VSXExtensionsWidget extends SourceTreeWidget {
     protected readonly extensionsSource: VSXExtensionsSource;
 
     @postConstruct()
-    protected init(): void {
+    protected override init(): void {
         super.init();
         this.addClass('theia-vsx-extensions');
 
@@ -67,15 +68,24 @@ export class VSXExtensionsWidget extends SourceTreeWidget {
     protected computeTitle(): string {
         switch (this.options.id) {
             case VSXExtensionsSourceOptions.INSTALLED:
-                return nls.localize('vscode/extensions.contribution/installed filter', 'Installed');
+                return nls.localizeByDefault('Installed');
             case VSXExtensionsSourceOptions.BUILT_IN:
-                return nls.localize('vscode/extensions.contribution/builtin filter', 'Built-in');
+                return nls.localizeByDefault('Built-in');
             case VSXExtensionsSourceOptions.RECOMMENDED:
-                return nls.localize('vscode/extensions.contribution/most popular recommended', 'Recommended');
+                return nls.localizeByDefault('Recommended');
             case VSXExtensionsSourceOptions.SEARCH_RESULT:
                 return nls.localize('theia/vsx-registry/openVSX', 'Open VSX Registry');
             default:
                 return '';
         }
+    }
+
+    protected override handleClickEvent(node: TreeNode | undefined, event: React.MouseEvent<HTMLElement>): void {
+        super.handleClickEvent(node, event);
+        this.model.openNode(node); // Open the editor view on a single click.
+    }
+
+    protected override handleDblClickEvent(): void {
+        // Don't open the editor view on a double click.
     }
 }

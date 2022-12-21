@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2020 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 // @ts-check
 describe('Saveable', function () {
@@ -33,6 +33,7 @@ describe('Saveable', function () {
     const { Disposable, DisposableCollection } = require('@theia/core/lib/common/disposable');
 
     const container = window.theia.container;
+    /** @type {EditorManager} */
     const editorManager = container.get(EditorManager);
     const workspaceService = container.get(WorkspaceService);
     const fileService = container.get(FileService);
@@ -264,6 +265,17 @@ describe('Saveable', function () {
         assert.isTrue(widget.isDisposed, 'model should be disposed after close');
         const state = await fileService.read(fileUri);
         assert.equal(state.value.trimRight(), 'bar', 'fs should be updated');
+    });
+
+    it('no save prompt when multiple editors open for same file', async () => {
+        const secondWidget = await editorManager.openToSide(fileUri);
+        editor.getControl().setValue('two widgets');
+        assert.isTrue(Saveable.isDirty(widget), 'the first widget should be dirty');
+        assert.isTrue(Saveable.isDirty(secondWidget), 'the second widget should also be dirty');
+        await Promise.resolve(secondWidget.close());
+        assert.isTrue(secondWidget.isDisposed, 'the widget should have closed without requesting user action');
+        assert.isTrue(Saveable.isDirty(widget), 'the original widget should still be dirty.');
+        assert.equal(editor.getControl().getValue(), 'two widgets', 'should still have the same value');
     });
 
     it('normal close', async () => {

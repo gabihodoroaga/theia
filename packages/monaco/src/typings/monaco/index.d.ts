@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-len */
 
@@ -904,7 +904,7 @@ declare module monaco.services {
         removeDecorationType: monaco.editor.ICodeEditorService['removeDecorationType'];
         resolveDecorationOptions: monaco.editor.ICodeEditorService['resolveDecorationOptions'];
         /**
-         * It respects inline and emebedded editors in comparison to `getActiveCodeEditor`
+         * It respects inline and embedded editors in comparison to `getActiveCodeEditor`
          * which only respect standalone and diff modified editors.
          */
         getFocusedCodeEditor(): monaco.editor.ICodeEditor | undefined;
@@ -997,7 +997,7 @@ declare module monaco.services {
         private readonly _instantiatedModes: { [modeId: string]: IMode; };
         private readonly _onLanguagesMaybeChanged: Emitter<void>;
         readonly onDidCreateMode: monaco.IEvent<IMode>;
-        createByFilepathOrFirstLine(rsource: monaco.Uri | null, firstLine?: string): ILanguageSelection;
+        createByFilepathOrFirstLine(resource: monaco.Uri | null, firstLine?: string): ILanguageSelection;
         getLanguageIdentifier(modeId: string | LanguageId): LanguageIdentifier | null;
     }
 
@@ -1917,6 +1917,11 @@ declare module monaco.quickInput {
         button: IQuickInputButton;
         item: T;
     }
+
+    // https://github.com/theia-ide/vscode/blob/standalone/0.23.x/src/vs/base/parts/quickinput/common/quickInput.ts#L324
+    export interface IQuickPickItemButtonContext<T extends IQuickPickItem> extends IQuickPickItemButtonEvent<T> {
+        removeItem(): void;
+    }
 }
 
 declare module monaco.quickOpen {
@@ -2142,7 +2147,7 @@ declare module monaco.contextKeyService {
 
         createScoped(target?: HTMLElement): IContextKeyService;
         createOverlay(overlay: Iterable<[string, any]>): IContextKeyService;
-        getContext(target?: HTMLElement): IContext;
+        getContext(target: HTMLElement | null): IContext;
 
         updateParent(parentContextKeyService: IContextKeyService): void;
     }
@@ -2152,26 +2157,51 @@ declare module monaco.contextKeyService {
         getValue<T>(key: string): T | undefined;
     }
 
+    // https://github.com/theia-ide/vscode/blob/e930e4240ee604757efbd7fd621b77b75568f95d/src/vs/platform/contextkey/browser/contextKeyService.ts#L19
+    export class Context implements IContext {
+        constructor(id: number, parent: Context | null);
+        setValue(key: string, value: any): boolean;
+        removeValue(key: string): boolean;
+        getValue<T>(key: string): T | undefined;
+        updateParent(parent: Context): void;
+        collectAllValues(): Record<string, any>;
+    }
+
     // https://github.com/theia-ide/vscode/blob/standalone/0.23.x/src/vs/platform/contextkey/common/contextkey.ts#L1333
     export interface IContextKeyChangeEvent {
         affectsSome(keys: Set<string>): boolean;
     }
 
-    // https://github.com/theia-ide/vscode/blob/standalone/0.23.x/src/vs/platform/contextkey/browser/contextKeyService.ts#L352
-    export class ContextKeyService implements IContextKeyService {
-        constructor(configurationService: monaco.services.IConfigurationService);
+    // https://github.com/theia-ide/vscode/blob/e930e4240ee604757efbd7fd621b77b75568f95d/src/vs/platform/contextkey/browser/contextKeyService.ts#L247
+    export abstract class AbstractContextKeyService implements IContextKeyService {
+        constructor(myContextId: number);
+        get contextId(): number;
         onDidChangeContext: monaco.IEvent<IContextKeyChangeEvent>;
-        bufferChangeEvents(callback: Function): void;
-
         createKey<T>(key: string, defaultValue: T | undefined): IContextKey<T>;
+        bufferChangeEvents(callback: Function): void;
+        createScoped(target?: HTMLElement): AbstractContextKeyService;
+        createOverlay(overlay: Iterable<[string, any]>): IContextKeyService;
         contextMatchesRules(rules: monaco.contextkey.ContextKeyExpression | undefined): boolean;
         getContextKeyValue<T>(key: string): T | undefined;
+        setContext(key: string, value: any): void;
+        removeContext(key: string): void;
+        getContext(target: HTMLElement | null): IContext;
 
-        createScoped(target?: HTMLElement): IContextKeyService;
-        createOverlay(overlay: Iterable<[string, any]>): IContextKeyService;
-        getContext(target?: HTMLElement): IContext;
+        abstract dispose(): void;
+        abstract getContextValuesContainer(contextId: number): Context;
+        abstract createChildContext(parentContextId?: number): number;
+        abstract disposeContext(contextId: number): void;
+        abstract updateParent(): void;
+    }
 
-        updateParent(parentContextKeyService: IContextKeyService): void;
+    // https://github.com/theia-ide/vscode/blob/standalone/0.23.x/src/vs/platform/contextkey/browser/contextKeyService.ts#L352
+    export class ContextKeyService extends AbstractContextKeyService {
+        constructor(configurationService: monaco.services.IConfigurationService);
+        dispose(): void;
+        getContextValuesContainer(contextId: number): Context;
+        createChildContext(parentContextId?: number): number;
+        disposeContext(contextId: number): void;
+        updateParent(): void;
     }
 }
 
@@ -2320,7 +2350,8 @@ declare module monaco.languages {
     export function registerRenameProvider(selector: monaco.modes.LanguageSelector, provider: RenameProvider): IDisposable;
     export function registerSignatureHelpProvider(selector: monaco.modes.LanguageSelector, provider: SignatureHelpProvider): IDisposable;
     export function registerHoverProvider(selector: monaco.modes.LanguageSelector, provider: HoverProvider): IDisposable;
-    export function registerDocumentSymbolProvider(selector: monaco.modes.LanguageSelector, provider: DocumentSymbolProvider): IDisposable;
+    export function registerDocumentSymbolProvider(selector: monaco.modes.LanguageSelector, provider: DocumentSymbolProvider,
+        metadata?: DocumentSymbolProviderMetadata): IDisposable;
     export function registerDocumentHighlightProvider(selector: monaco.modes.LanguageSelector, provider: DocumentHighlightProvider): IDisposable;
     export function registerDefinitionProvider(selector: monaco.modes.LanguageSelector, provider: DefinitionProvider): IDisposable;
     export function registerImplementationProvider(selector: monaco.modes.LanguageSelector, provider: ImplementationProvider): IDisposable;
@@ -2346,7 +2377,7 @@ declare module monaco.list {
             private user: string,
             container: HTMLElement,
             virtualDelegate: IListVirtualDelegate<T>,
-            renderers: IListRenderer<any /* TODO@joao */, any>[],
+            renderers: IListRenderer<any, any>[],
             private _options: IListOptions<T> = DefaultOptions
         )
 

@@ -1,23 +1,23 @@
-/********************************************************************************
- * Copyright (C) 2017 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { OpenerService, open, WidgetOpenerOptions, Widget } from '@theia/core/lib/browser';
 import { KeybindingRegistry, KeybindingScope } from '@theia/core/lib/browser/keybinding';
-import { Keybinding } from '@theia/core/lib/common/keybinding';
+import { Keybinding, RawKeybinding } from '@theia/core/lib/common/keybinding';
 import { UserStorageUri } from '@theia/userstorage/lib/browser';
 import * as jsoncparser from 'jsonc-parser';
 import { Emitter } from '@theia/core/lib/common/event';
@@ -85,6 +85,8 @@ export class KeymapsService {
                     for (const value of json) {
                         if (Keybinding.is(value)) {
                             keybindings.push(value);
+                        } else if (RawKeybinding.is(value)) {
+                            keybindings.push(Keybinding.apiObjectify(value));
                         }
                     }
                 }

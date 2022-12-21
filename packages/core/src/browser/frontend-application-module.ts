@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import '../../src/browser/style/index.css';
 require('../../src/browser/style/materialcolors.css').use();
@@ -62,7 +62,7 @@ import { FrontendApplicationStateService } from './frontend-application-state';
 import { JsonSchemaStore, JsonSchemaContribution, DefaultJsonSchemaContribution } from './json-schema-store';
 import { TabBarToolbarRegistry, TabBarToolbarContribution, TabBarToolbarFactory, TabBarToolbar } from './shell/tab-bar-toolbar';
 import { bindCorePreferences } from './core-preferences';
-import { ContextKeyService } from './context-key-service';
+import { ContextKeyService, ContextKeyServiceDummyImpl } from './context-key-service';
 import { ResourceContextKey } from './resource-context-key';
 import { KeyboardLayoutService } from './keyboard/keyboard-layout-service';
 import { MimeService } from './mime-service';
@@ -119,6 +119,8 @@ import {
 } from './breadcrumbs';
 import { RendererHost } from './widgets';
 import { TooltipService, TooltipServiceImpl } from './tooltip-service';
+import { bindFrontendStopwatch, bindBackendStopwatch } from './performance';
+import { SaveResourceService } from './save-resource-service';
 
 export { bindResourceProvider, bindMessageService, bindPreferenceService };
 
@@ -165,11 +167,13 @@ export const frontendApplicationModule = new ContainerModule((bind, unbind, isBo
 
     bind(DockPanelRendererFactory).toFactory(context => () => context.container.get(DockPanelRenderer));
     bind(DockPanelRenderer).toSelf();
-    bind(TabBarRendererFactory).toFactory(context => () => {
-        const contextMenuRenderer = context.container.get<ContextMenuRenderer>(ContextMenuRenderer);
-        const decoratorService = context.container.get<TabBarDecoratorService>(TabBarDecoratorService);
-        const iconThemeService = context.container.get<IconThemeService>(IconThemeService);
-        return new TabBarRenderer(contextMenuRenderer, decoratorService, iconThemeService);
+    bind(TabBarRendererFactory).toFactory(({ container }) => () => {
+        const contextMenuRenderer = container.get(ContextMenuRenderer);
+        const tabBarDecoratorService = container.get(TabBarDecoratorService);
+        const iconThemeService = container.get(IconThemeService);
+        const selectionService = container.get(SelectionService);
+        const commandService = container.get<CommandService>(CommandService);
+        return new TabBarRenderer(contextMenuRenderer, tabBarDecoratorService, iconThemeService, selectionService, commandService);
     });
 
     bindContributionProvider(bind, TabBarDecorator);
@@ -220,7 +224,7 @@ export const frontendApplicationModule = new ContainerModule((bind, unbind, isBo
     bind(CommandService).toService(CommandRegistry);
     bindContributionProvider(bind, CommandContribution);
 
-    bind(ContextKeyService).toSelf().inSingletonScope();
+    bind(ContextKeyService).to(ContextKeyServiceDummyImpl).inSingletonScope();
 
     bind(MenuModelRegistry).toSelf().inSingletonScope();
     bindContributionProvider(bind, MenuContribution);
@@ -389,4 +393,9 @@ export const frontendApplicationModule = new ContainerModule((bind, unbind, isBo
         child.bind(Coordinate).toConstantValue(position);
         return child.get(BreadcrumbPopupContainer);
     });
+
+    bindFrontendStopwatch(bind);
+    bindBackendStopwatch(bind);
+
+    bind(SaveResourceService).toSelf().inSingletonScope();
 });

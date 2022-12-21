@@ -1,33 +1,35 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
-import { CancellationToken, cancelled } from './cancellation';
+import { Disposable } from './disposable';
+import { Event } from './event';
+import { CancellationToken, CancellationError, cancelled } from './cancellation';
 
 /**
  * Simple implementation of the deferred pattern.
  * An object that exposes a promise and functions to resolve and reject it.
  */
-export class Deferred<T> {
+export class Deferred<T = void> {
     state: 'resolved' | 'rejected' | 'unresolved' = 'unresolved';
-    resolve: (value?: T) => void;
+    resolve: (value: T) => void;
     reject: (err?: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     promise = new Promise<T>((resolve, reject) => {
         this.resolve = result => {
-            resolve(result as T);
+            resolve(result);
             if (this.state === 'unresolved') {
                 this.state = 'resolved';
             }
@@ -52,6 +54,22 @@ export function timeout(ms: number, token = CancellationToken.None): Promise<voi
         clearTimeout(handle);
         deferred.reject(cancelled());
     });
+    return deferred.promise;
+}
+
+/**
+ * Creates a promise that is rejected after the given amount of time. A typical use case is to wait for another promise until a specified timeout using:
+ * ```
+ * Promise.race([ promiseToPerform, timeoutReject(timeout, 'Timeout error message') ]);
+ * ```
+ *
+ * @param ms timeout in milliseconds
+ * @param message error message on promise rejection
+ * @returns rejection promise
+ */
+export function timeoutReject<T>(ms: number, message?: string): Promise<T> {
+    const deferred = new Deferred<T>();
+    setTimeout(() => deferred.reject(new Error(message)), ms);
     return deferred.promise;
 }
 
@@ -89,4 +107,21 @@ export function delay<T>(ms: number): (value: T) => Promise<T> {
  */
 export async function wait(ms: number): Promise<void> {
     await delay(ms)(undefined);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function waitForEvent<T>(event: Event<T>, ms: number, thisArg?: any, disposables?: Disposable[]): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const registration = setTimeout(() => {
+            listener.dispose();
+            reject(new CancellationError());
+        }, ms);
+
+        const listener = event((evt: T) => {
+            clearTimeout(registration);
+            listener.dispose();
+            resolve(evt);
+        }, thisArg, disposables);
+
+    });
 }

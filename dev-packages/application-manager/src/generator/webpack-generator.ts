@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as paths from 'path';
 import * as fs from 'fs-extra';
@@ -56,9 +56,9 @@ export class WebpackGenerator extends AbstractGenerator {
 const path = require('path');
 const webpack = require('webpack');
 const yargs = require('yargs');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const CircularDependencyPlugin = require('circular-dependency-plugin');
-const CompressionPlugin = require('@theia/compression-webpack-plugin')
+${this.ifMonaco(() => `const CopyWebpackPlugin = require('copy-webpack-plugin');
+`)}const CircularDependencyPlugin = require('circular-dependency-plugin');
+const CompressionPlugin = require('compression-webpack-plugin')
 
 const outputPath = path.resolve(__dirname, 'lib');
 const { mode, staticCompression }  = yargs.option('mode', {
@@ -75,23 +75,20 @@ const development = mode === 'development';${this.ifMonaco(() => `
 const monacoEditorCorePath = development ? '${this.resolve('@theia/monaco-editor-core', 'dev/vs')}' : '${this.resolve('@theia/monaco-editor-core', 'min/vs')}';`)}
 
 const plugins = [
-    new CopyWebpackPlugin({
-        patterns: [${this.ifMonaco(() => `{
+    ${this.ifMonaco(() => `new CopyWebpackPlugin({
+        patterns: [{
             from: monacoEditorCorePath,
             to: 'vs'
-        }`)}]
+        }]
     }),
-    new webpack.ProvidePlugin({
+    `)}new webpack.ProvidePlugin({
         // the Buffer class doesn't exist in the browser but some dependencies rely on it
         Buffer: ['buffer', 'Buffer']
     })
 ];
 // it should go after copy-plugin in order to compress monaco as well
 if (staticCompression) {
-    plugins.push(new CompressionPlugin({
-        // enable reuse of compressed artifacts for incremental development
-        cache: development
-    }));
+    plugins.push(new CompressionPlugin({}));
 }
 plugins.push(new CircularDependencyPlugin({
     exclude: /(node_modules|examples)[\\\\|\/]./,
@@ -105,9 +102,11 @@ module.exports = {
     entry: path.resolve(__dirname, 'src-gen/frontend/index.js'),
     output: {
         filename: 'bundle.js',
-        path: outputPath
+        path: outputPath,
+        devtoolModuleFilenameTemplate: 'webpack:///[resource-path]?[loaders]'
     },
     target: '${this.ifBrowser('web', 'electron-renderer')}',
+    cache: staticCompression,
     module: {
         rules: [
             {
@@ -178,7 +177,7 @@ module.exports = {
                 }
             },
             {
-                test: /node_modules[\\\\|\/](vscode-languageserver-types|vscode-uri|jsonc-parser)/,
+                test: /node_modules[\\\\|\/](vscode-languageserver-types|vscode-uri|jsonc-parser|vscode-languageserver-protocol)/,
                 loader: 'umd-compat-loader'
             },
             {
@@ -196,7 +195,7 @@ module.exports = {
             'child_process': false,
             'crypto': false,
             'net': false,
-            'path': false,
+            'path': require.resolve('path-browserify'),
             'process': false,
             'os': false,
             'timers': false

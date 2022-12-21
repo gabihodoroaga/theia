@@ -1,38 +1,37 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable max-len, @typescript-eslint/indent */
 
 import debounce = require('lodash.debounce');
 import { injectable, inject, optional } from 'inversify';
-import { TabBar, Widget } from '@phosphor/widgets';
 import { MAIN_MENU_BAR, SETTINGS_MENU, MenuContribution, MenuModelRegistry, ACCOUNTS_MENU } from '../common/menu';
 import { KeybindingContribution, KeybindingRegistry } from './keybinding';
-import { FrontendApplication, FrontendApplicationContribution } from './frontend-application';
+import { FrontendApplication, FrontendApplicationContribution, OnWillStopAction } from './frontend-application';
 import { CommandContribution, CommandRegistry, Command } from '../common/command';
 import { UriAwareCommandHandler } from '../common/uri-command-handler';
 import { SelectionService } from '../common/selection-service';
 import { MessageService } from '../common/message-service';
 import { OpenerService, open } from '../browser/opener-service';
 import { ApplicationShell } from './shell/application-shell';
-import { SHELL_TABBAR_CONTEXT_MENU } from './shell/tab-bars';
+import { SHELL_TABBAR_CONTEXT_CLOSE, SHELL_TABBAR_CONTEXT_COPY, SHELL_TABBAR_CONTEXT_PIN, SHELL_TABBAR_CONTEXT_SPLIT } from './shell/tab-bars';
 import { AboutDialog } from './about-dialog';
 import * as browser from './browser';
 import URI from '../common/uri';
-import { ContextKeyService } from './context-key-service';
+import { ContextKey, ContextKeyService } from './context-key-service';
 import { OS, isOSX, isWindows } from '../common/os';
 import { ResourceContextKey } from './resource-context-key';
 import { UriSelection } from '../common/selection';
@@ -51,10 +50,17 @@ import { EncodingRegistry } from './encoding-registry';
 import { UTF8 } from '../common/encodings';
 import { EnvVariablesServer } from '../common/env-variables';
 import { AuthenticationService } from './authentication-service';
-import { FormatType } from './saveable';
+import { FormatType, Saveable, SaveOptions } from './saveable';
 import { QuickInputService, QuickPick, QuickPickItem } from './quick-input';
 import { AsyncLocalizationProvider } from '../common/i18n/localization';
 import { nls } from '../common/nls';
+import { CurrentWidgetCommandAdapter } from './shell/current-widget-command-adapter';
+import { ConfirmDialog, confirmExit, Dialog } from './dialogs';
+import { WindowService } from './window/window-service';
+import { FrontendApplicationConfigProvider } from './frontend-application-config-provider';
+import { DecorationStyle } from './decoration-style';
+import { isPinned, Title, togglePinned, Widget } from './widgets';
+import { SaveResourceService } from './save-resource-service';
 
 export namespace CommonMenus {
 
@@ -76,13 +82,19 @@ export namespace CommonMenus {
 
     export const VIEW = [...MAIN_MENU_BAR, '4_view'];
     export const VIEW_PRIMARY = [...VIEW, '0_primary'];
-    export const VIEW_VIEWS = [...VIEW, '1_views'];
-    export const VIEW_LAYOUT = [...VIEW, '2_layout'];
-    export const VIEW_TOGGLE = [...VIEW, '3_toggle'];
+    export const VIEW_APPEARANCE = [...VIEW, '1_appearance'];
+    export const VIEW_APPEARANCE_SUBMENU = [...VIEW_APPEARANCE, '1_appearance_submenu'];
+    export const VIEW_APPEARANCE_SUBMENU_SCREEN = [...VIEW_APPEARANCE_SUBMENU, '2_appearance_submenu_screen'];
+    export const VIEW_APPEARANCE_SUBMENU_BAR = [...VIEW_APPEARANCE_SUBMENU, '3_appearance_submenu_bar'];
+    export const VIEW_EDITOR_SUBMENU = [...VIEW_APPEARANCE, '2_editor_submenu'];
+    export const VIEW_EDITOR_SUBMENU_SPLIT = [...VIEW_EDITOR_SUBMENU, '1_editor_submenu_split'];
+    export const VIEW_EDITOR_SUBMENU_ORTHO = [...VIEW_EDITOR_SUBMENU, '2_editor_submenu_ortho'];
+    export const VIEW_VIEWS = [...VIEW, '2_views'];
+    export const VIEW_LAYOUT = [...VIEW, '3_layout'];
+    export const VIEW_TOGGLE = [...VIEW, '4_toggle'];
 
     export const SETTINGS_OPEN = [...SETTINGS_MENU, '1_settings_open'];
     export const SETTINGS__THEME = [...SETTINGS_MENU, '2_settings_theme'];
-
     // last menu item
     export const HELP = [...MAIN_MENU_BAR, '9_help'];
 
@@ -90,67 +102,67 @@ export namespace CommonMenus {
 
 export namespace CommonCommands {
 
-    export const FILE_CATEGORY_KEY = 'vscode/menubarControl/mFile';
-    export const VIEW_CATEGORY_KEY = 'vscode/menubarControl/mView';
-    export const PREFERENCES_CATEGORY_KEY = 'vscode/actions/preferences';
     export const FILE_CATEGORY = 'File';
     export const VIEW_CATEGORY = 'View';
     export const PREFERENCES_CATEGORY = 'Preferences';
+    export const FILE_CATEGORY_KEY = nls.getDefaultKey(FILE_CATEGORY);
+    export const VIEW_CATEGORY_KEY = nls.getDefaultKey(VIEW_CATEGORY);
+    export const PREFERENCES_CATEGORY_KEY = nls.getDefaultKey(PREFERENCES_CATEGORY);
 
     export const OPEN: Command = {
         id: 'core.open',
     };
 
-    export const CUT = Command.toLocalizedCommand({
+    export const CUT = Command.toDefaultLocalizedCommand({
         id: 'core.cut',
         label: 'Cut'
-    }, 'vscode/fileActions.contribution/cut');
-    export const COPY = Command.toLocalizedCommand({
+    });
+    export const COPY = Command.toDefaultLocalizedCommand({
         id: 'core.copy',
         label: 'Copy'
-    }, 'vscode/fileActions/copyFile');
-    export const PASTE = Command.toLocalizedCommand({
+    });
+    export const PASTE = Command.toDefaultLocalizedCommand({
         id: 'core.paste',
         label: 'Paste'
-    }, 'vscode/fileActions/pasteFile');
+    });
 
-    export const COPY_PATH = Command.toLocalizedCommand({
+    export const COPY_PATH = Command.toDefaultLocalizedCommand({
         id: 'core.copy.path',
         label: 'Copy Path'
-    }, 'vscode/fileActions.contribution/copyPath');
+    });
 
-    export const UNDO = Command.toLocalizedCommand({
+    export const UNDO = Command.toDefaultLocalizedCommand({
         id: 'core.undo',
         label: 'Undo'
-    }, 'vscode/textInputActions/undo');
-    export const REDO = Command.toLocalizedCommand({
+    });
+    export const REDO = Command.toDefaultLocalizedCommand({
         id: 'core.redo',
         label: 'Redo'
-    }, 'vscode/textInputActions/redo');
-    export const SELECT_ALL = Command.toLocalizedCommand({
+    });
+    export const SELECT_ALL = Command.toDefaultLocalizedCommand({
         id: 'core.selectAll',
         label: 'Select All'
-    }, 'vscode/textInputActions/selectAll');
+    });
 
-    export const FIND = Command.toLocalizedCommand({
+    export const FIND = Command.toDefaultLocalizedCommand({
         id: 'core.find',
         label: 'Find'
-    }, 'vscode/simpleFindReplaceWidget/label.find');
-    export const REPLACE = Command.toLocalizedCommand({
+    });
+    export const REPLACE = Command.toDefaultLocalizedCommand({
         id: 'core.replace',
         label: 'Replace'
-    }, 'vscode/simpleFindReplaceWidget/label.replace');
+    });
 
-    export const NEXT_TAB = Command.toLocalizedCommand({
+    export const NEXT_TAB = Command.toDefaultLocalizedCommand({
         id: 'core.nextTab',
         category: VIEW_CATEGORY,
-        label: 'Switch to Next Tab'
-    }, 'vscode/menubar/mShowNextTab', VIEW_CATEGORY_KEY);
-    export const PREVIOUS_TAB = Command.toLocalizedCommand({
+        label: 'Show Next Tab'
+    });
+    export const PREVIOUS_TAB = Command.toDefaultLocalizedCommand({
         id: 'core.previousTab',
         category: VIEW_CATEGORY,
-        label: 'Switch to Previous Tab'
-    }, 'vscode/menubar/mShowPreviousTab', VIEW_CATEGORY_KEY);
+        label: 'Show Previous Tab'
+    });
     export const NEXT_TAB_IN_GROUP = Command.toLocalizedCommand({
         id: 'core.nextTabInGroup',
         category: VIEW_CATEGORY,
@@ -181,6 +193,11 @@ export namespace CommonCommands {
         category: VIEW_CATEGORY,
         label: 'Close Other Tabs'
     }, 'theia/core/common/closeOthers', VIEW_CATEGORY_KEY);
+    export const CLOSE_SAVED_TABS = Command.toDefaultLocalizedCommand({
+        id: 'workbench.action.closeUnmodifiedEditors',
+        category: VIEW_CATEGORY,
+        label: 'Close Saved Editors in Group',
+    });
     export const CLOSE_RIGHT_TABS = Command.toLocalizedCommand({
         id: 'core.close.right.tabs',
         category: VIEW_CATEGORY,
@@ -221,71 +238,85 @@ export namespace CommonCommands {
         category: VIEW_CATEGORY,
         label: 'Toggle Bottom Panel'
     }, 'theia/core/common/collapseBottomPanel', VIEW_CATEGORY_KEY);
-    export const TOGGLE_STATUS_BAR = Command.toLocalizedCommand({
+    export const TOGGLE_STATUS_BAR = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.toggleStatusbarVisibility',
         category: VIEW_CATEGORY,
         label: 'Toggle Status Bar Visibility'
-    }, 'vscode/layoutActions/toggleStatusbar');
+    });
+    export const PIN_TAB = Command.toDefaultLocalizedCommand({
+        id: 'workbench.action.pinEditor',
+        category: VIEW_CATEGORY,
+        label: 'Pin Editor'
+    });
+    export const UNPIN_TAB = Command.toDefaultLocalizedCommand({
+        id: 'workbench.action.unpinEditor',
+        category: VIEW_CATEGORY,
+        label: 'Unpin Editor'
+    });
     export const TOGGLE_MAXIMIZED = Command.toLocalizedCommand({
         id: 'core.toggleMaximized',
         category: VIEW_CATEGORY,
         label: 'Toggle Maximized'
     }, 'theia/core/common/toggleMaximized', VIEW_CATEGORY_KEY);
-    export const OPEN_VIEW = Command.toLocalizedCommand({
+    export const OPEN_VIEW = Command.toDefaultLocalizedCommand({
         id: 'core.openView',
         category: VIEW_CATEGORY,
         label: 'Open View...'
-    }, 'vscode/quickAccess.contribution/miOpenView', VIEW_CATEGORY_KEY);
+    });
+    export const SHOW_MENU_BAR = Command.toDefaultLocalizedCommand({
+        id: 'window.menuBarVisibility',
+        category: VIEW_CATEGORY,
+        label: 'Show Menu Bar'
+    });
 
-    export const SAVE = Command.toLocalizedCommand({
+    export const SAVE = Command.toDefaultLocalizedCommand({
         id: 'core.save',
         category: FILE_CATEGORY,
         label: 'Save',
-    }, 'vscode/fileCommands/save', FILE_CATEGORY_KEY);
-    export const SAVE_WITHOUT_FORMATTING = Command.toLocalizedCommand({
+    });
+    export const SAVE_WITHOUT_FORMATTING = Command.toDefaultLocalizedCommand({
         id: 'core.saveWithoutFormatting',
         category: FILE_CATEGORY,
         label: 'Save without Formatting',
-    }, 'vscode/fileCommands/saveWithoutFormatting', FILE_CATEGORY_KEY);
-    export const SAVE_ALL = Command.toLocalizedCommand({
+    });
+    export const SAVE_ALL = Command.toDefaultLocalizedCommand({
         id: 'core.saveAll',
         category: FILE_CATEGORY,
         label: 'Save All',
-    }, 'vscode/fileCommands/saveAll', FILE_CATEGORY_KEY);
+    });
 
-    export const AUTO_SAVE = Command.toLocalizedCommand({
+    export const AUTO_SAVE = Command.toDefaultLocalizedCommand({
         id: 'textEditor.commands.autosave',
         category: FILE_CATEGORY,
         label: 'Auto Save',
-    }, 'vscode/fileActions.contribution/miAutoSave', FILE_CATEGORY_KEY);
+    });
 
-    export const ABOUT_COMMAND = Command.toLocalizedCommand({
+    export const ABOUT_COMMAND = Command.toDefaultLocalizedCommand({
         id: 'core.about',
         label: 'About'
-    }, 'vscode/windowActions/about');
+    });
 
-    export const OPEN_PREFERENCES = Command.toLocalizedCommand({
+    export const OPEN_PREFERENCES = Command.toDefaultLocalizedCommand({
         id: 'preferences:open',
         category: PREFERENCES_CATEGORY,
-        label: 'Open Preferences',
-    }, 'vscode/preferences.contribution/preferences', PREFERENCES_CATEGORY_KEY);
+        label: 'Open Settings (UI)',
+    });
 
-    export const SELECT_COLOR_THEME = Command.toLocalizedCommand({
+    export const SELECT_COLOR_THEME = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.selectTheme',
         label: 'Color Theme',
         category: PREFERENCES_CATEGORY
-    }, 'vscode/themes.contribution/selectTheme.label', PREFERENCES_CATEGORY_KEY);
-    export const SELECT_ICON_THEME = Command.toLocalizedCommand({
+    });
+    export const SELECT_ICON_THEME = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.selectIconTheme',
         label: 'File Icon Theme',
         category: PREFERENCES_CATEGORY
-    }, 'vscode/themes.contribution/selectIconTheme.label', PREFERENCES_CATEGORY_KEY);
+    });
 
-    export const CONFIGURE_DISPLAY_LANGUAGE = Command.toLocalizedCommand({
+    export const CONFIGURE_DISPLAY_LANGUAGE = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.configureLanguage',
         label: 'Configure Display Language'
-    }, 'vscode/localizationsActions/configureLocale');
-
+    });
 }
 
 export const supportCut = browser.isNative || document.queryCommandSupported('cut');
@@ -300,13 +331,16 @@ export const RECENT_COMMANDS_STORAGE_KEY = 'commands';
 @injectable()
 export class CommonFrontendContribution implements FrontendApplicationContribution, MenuContribution, CommandContribution, KeybindingContribution, ColorContribution {
 
+    protected commonDecorationsStyleSheet: CSSStyleSheet = DecorationStyle.createStyleSheet('coreCommonDecorationsStyle');
+
     constructor(
         @inject(ApplicationShell) protected readonly shell: ApplicationShell,
         @inject(SelectionService) protected readonly selectionService: SelectionService,
         @inject(MessageService) protected readonly messageService: MessageService,
         @inject(OpenerService) protected readonly openerService: OpenerService,
         @inject(AboutDialog) protected readonly aboutDialog: AboutDialog,
-        @inject(AsyncLocalizationProvider) protected readonly localizationProvider: AsyncLocalizationProvider
+        @inject(AsyncLocalizationProvider) protected readonly localizationProvider: AsyncLocalizationProvider,
+        @inject(SaveResourceService) protected readonly saveResourceService: SaveResourceService,
     ) { }
 
     @inject(ContextKeyService)
@@ -348,6 +382,11 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
     @inject(AuthenticationService)
     protected readonly authenticationService: AuthenticationService;
 
+    @inject(WindowService)
+    protected readonly windowService: WindowService;
+
+    protected pinnedKey: ContextKey<boolean>;
+
     async configure(app: FrontendApplication): Promise<void> {
         const configDirUri = await this.environments.getConfigDirUri();
         // Global settings
@@ -361,12 +400,17 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         this.contextKeyService.createKey<boolean>('isWindows', OS.type() === OS.Type.Windows);
         this.contextKeyService.createKey<boolean>('isWeb', !this.isElectron());
 
+        this.pinnedKey = this.contextKeyService.createKey<boolean>('activeEditorIsPinned', false);
+        this.updatePinnedKey();
+        this.shell.onDidChangeActiveWidget(() => this.updatePinnedKey());
+
         this.initResourceContextKeys();
         this.registerCtrlWHandling();
 
         this.updateStyles();
         this.updateThemeFromPreference('workbench.colorTheme');
         this.updateThemeFromPreference('workbench.iconTheme');
+        this.preferences.ready.then(() => this.setSashProperties());
         this.preferences.onPreferenceChanged(e => this.handlePreferenceChange(e, app));
         this.themeService.onDidColorThemeChange(() => this.updateThemePreference('workbench.colorTheme'));
         this.iconThemes.onDidChangeCurrent(() => this.updateThemePreference('workbench.iconTheme'));
@@ -374,14 +418,14 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         app.shell.leftPanelHandler.addBottomMenu({
             id: 'settings-menu',
             iconClass: 'codicon codicon-settings-gear',
-            title: nls.localize(CommonCommands.PREFERENCES_CATEGORY_KEY, CommonCommands.PREFERENCES_CATEGORY),
+            title: nls.localizeByDefault(CommonCommands.PREFERENCES_CATEGORY),
             menuPath: SETTINGS_MENU,
             order: 0,
         });
         const accountsMenu = {
             id: 'accounts-menu',
             iconClass: 'codicon codicon-person',
-            title: nls.localize('vscode/activitybarPart/accounts', 'Accounts'),
+            title: nls.localizeByDefault('Accounts'),
             menuPath: ACCOUNTS_MENU,
             order: 1,
         };
@@ -400,6 +444,13 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         if (this.preferences['workbench.editor.highlightModifiedTabs']) {
             document.body.classList.add('theia-editor-highlightModifiedTabs');
         }
+    }
+
+    protected updatePinnedKey(): void {
+        const activeTab = this.shell.findTabBar();
+        const pinningTarget = activeTab && this.shell.findTitle(activeTab);
+        const value = pinningTarget && isPinned(pinningTarget);
+        this.pinnedKey.set(value);
     }
 
     protected updateThemePreference(preferenceName: 'workbench.colorTheme' | 'workbench.iconTheme'): void {
@@ -446,8 +497,8 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
                     this.shell.leftPanelHandler.addTopMenu({
                         id: mainMenuId,
                         iconClass: 'codicon codicon-menu',
-                        title: nls.localize('vscode/menubar/mAppMenu', 'Application Menu'),
-                        menuPath: ['menubar'],
+                        title: nls.localizeByDefault('Application Menu'),
+                        menuPath: MAIN_MENU_BAR,
                         order: 0,
                     });
                 } else {
@@ -455,7 +506,22 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
                 }
                 break;
             }
+            case 'workbench.sash.hoverDelay':
+            case 'workbench.sash.size': {
+                this.setSashProperties();
+                break;
+            }
         }
+    }
+
+    protected setSashProperties(): void {
+        const sashRule = `:root {
+            --theia-sash-hoverDelay: ${this.preferences['workbench.sash.hoverDelay']}ms;
+            --theia-sash-width: ${this.preferences['workbench.sash.size']}px;
+        }`;
+
+        DecorationStyle.deleteStyleRule(':root', this.commonDecorationsStyleSheet);
+        this.commonDecorationsStyleSheet.insertRule(sashRule);
     }
 
     onStart(): void {
@@ -479,10 +545,10 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
     }
 
     registerMenus(registry: MenuModelRegistry): void {
-        registry.registerSubmenu(CommonMenus.FILE, nls.localize('vscode/menubarControl/mFile', 'File'));
-        registry.registerSubmenu(CommonMenus.EDIT, nls.localize('vscode/menubarControl/mEdit', 'Edit'));
-        registry.registerSubmenu(CommonMenus.VIEW, nls.localize('vscode/menubarControl/mView', 'View'));
-        registry.registerSubmenu(CommonMenus.HELP, nls.localize('vscode/menubarControl/mHelp', 'Help'));
+        registry.registerSubmenu(CommonMenus.FILE, nls.localizeByDefault('File'));
+        registry.registerSubmenu(CommonMenus.EDIT, nls.localizeByDefault('Edit'));
+        registry.registerSubmenu(CommonMenus.VIEW, nls.localizeByDefault('View'));
+        registry.registerSubmenu(CommonMenus.HELP, nls.localizeByDefault('Help'));
 
         registry.registerMenuAction(CommonMenus.FILE_SAVE, {
             commandId: CommonCommands.SAVE.id
@@ -495,7 +561,7 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             commandId: CommonCommands.AUTO_SAVE.id
         });
 
-        registry.registerSubmenu(CommonMenus.FILE_SETTINGS_SUBMENU, nls.localize(CommonCommands.PREFERENCES_CATEGORY_KEY, CommonCommands.PREFERENCES_CATEGORY));
+        registry.registerSubmenu(CommonMenus.FILE_SETTINGS_SUBMENU, nls.localizeByDefault(CommonCommands.PREFERENCES_CATEGORY));
 
         registry.registerMenuAction(CommonMenus.EDIT_UNDO, {
             commandId: CommonCommands.UNDO.id,
@@ -532,49 +598,79 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             order: '3'
         });
 
-        registry.registerMenuAction(CommonMenus.VIEW_LAYOUT, {
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_BAR, {
             commandId: CommonCommands.TOGGLE_BOTTOM_PANEL.id,
-            order: '0'
-        });
-        registry.registerMenuAction(CommonMenus.VIEW_LAYOUT, {
-            commandId: CommonCommands.TOGGLE_STATUS_BAR.id,
-            order: '1',
-            label: 'Toggle Status Bar'
-        });
-        registry.registerMenuAction(CommonMenus.VIEW_LAYOUT, {
-            commandId: CommonCommands.COLLAPSE_ALL_PANELS.id,
-            order: '2'
-        });
-
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
-            commandId: CommonCommands.CLOSE_TAB.id,
-            label: nls.localize('vscode/editor.contribution/close', 'Close'),
-            order: '0'
-        });
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
-            commandId: CommonCommands.CLOSE_OTHER_TABS.id,
-            label: nls.localize('vscode/editor.contribution/closeOthers', 'Close Others'),
             order: '1'
         });
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
-            commandId: CommonCommands.CLOSE_RIGHT_TABS.id,
-            label: nls.localize('vscode/editor.contribution/closeRight', 'Close to the Right'),
-            order: '2'
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_BAR, {
+            commandId: CommonCommands.TOGGLE_STATUS_BAR.id,
+            order: '2',
+            label: nls.localizeByDefault('Toggle Status Bar Visibility')
         });
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
-            commandId: CommonCommands.CLOSE_ALL_TABS.id,
-            label: nls.localize('vscode/editor.contribution/closeAll', 'Close All'),
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_BAR, {
+            commandId: CommonCommands.COLLAPSE_ALL_PANELS.id,
             order: '3'
         });
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
-            commandId: CommonCommands.COLLAPSE_PANEL.id,
-            label: CommonCommands.COLLAPSE_PANEL.label,
+
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_CLOSE, {
+            commandId: CommonCommands.CLOSE_TAB.id,
+            label: nls.localizeByDefault('Close'),
+            order: '0'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_CLOSE, {
+            commandId: CommonCommands.CLOSE_OTHER_TABS.id,
+            label: nls.localizeByDefault('Close Others'),
+            order: '1'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_CLOSE, {
+            commandId: CommonCommands.CLOSE_RIGHT_TABS.id,
+            label: nls.localizeByDefault('Close to the Right'),
+            order: '2'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_CLOSE, {
+            commandId: CommonCommands.CLOSE_SAVED_TABS.id,
+            label: nls.localizeByDefault('Close Saved'),
+            order: '3',
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_CLOSE, {
+            commandId: CommonCommands.CLOSE_ALL_TABS.id,
+            label: nls.localizeByDefault('Close All'),
             order: '4'
         });
-        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_MENU, {
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
+            commandId: CommonCommands.COLLAPSE_PANEL.id,
+            label: CommonCommands.COLLAPSE_PANEL.label,
+            order: '5'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
             commandId: CommonCommands.TOGGLE_MAXIMIZED.id,
             label: CommonCommands.TOGGLE_MAXIMIZED.label,
-            order: '5'
+            order: '6'
+        });
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_SCREEN, {
+            commandId: CommonCommands.TOGGLE_MAXIMIZED.id,
+            label: CommonCommands.TOGGLE_MAXIMIZED.label,
+            order: '6'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_COPY, {
+            commandId: CommonCommands.COPY_PATH.id,
+            label: CommonCommands.COPY_PATH.label,
+            order: '1',
+        });
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_BAR, {
+            commandId: CommonCommands.SHOW_MENU_BAR.id,
+            label: nls.localizeByDefault('Toggle Menu Bar'),
+            order: '0'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_PIN, {
+            commandId: CommonCommands.PIN_TAB.id,
+            label: nls.localizeByDefault('Pin'),
+            order: '7'
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_PIN, {
+            commandId: CommonCommands.UNPIN_TAB.id,
+            label: nls.localizeByDefault('Unpin'),
+            order: '8'
         });
         registry.registerMenuAction(CommonMenus.HELP, {
             commandId: CommonCommands.ABOUT_COMMAND.id,
@@ -599,6 +695,8 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         registry.registerMenuAction(CommonMenus.SETTINGS__THEME, {
             commandId: CommonCommands.SELECT_ICON_THEME.id
         });
+
+        registry.registerSubmenu(CommonMenus.VIEW_APPEARANCE_SUBMENU, nls.localizeByDefault('Appearance'));
     }
 
     registerCommands(commandRegistry: CommandRegistry): void {
@@ -633,6 +731,8 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             }
         });
         commandRegistry.registerCommand(CommonCommands.COPY_PATH, UriAwareCommandHandler.MultiSelect(this.selectionService, {
+            isVisible: uris => Array.isArray(uris) && uris.some(uri => uri instanceof URI),
+            isEnabled: uris => Array.isArray(uris) && uris.some(uri => uri instanceof URI),
             execute: async uris => {
                 if (uris.length) {
                     const lineDelimiter = isWindows ? '\r\n' : '\n';
@@ -685,62 +785,45 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             isEnabled: () => this.shell.previousTabBar() !== undefined,
             execute: () => this.shell.activatePreviousTabBar()
         });
-        commandRegistry.registerCommand(CommonCommands.CLOSE_TAB, {
-            isEnabled: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event);
-                if (!tabBar) {
-                    return false;
-                }
-                const currentTitle = this.shell.findTitle(tabBar, event);
-                return currentTitle !== undefined && currentTitle.closable;
+        commandRegistry.registerCommand(CommonCommands.CLOSE_TAB, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: title => Boolean(title?.closable),
+            execute: (title, tabBar) => tabBar && this.shell.closeTabs(tabBar, candidate => candidate === title),
+        }));
+        commandRegistry.registerCommand(CommonCommands.CLOSE_OTHER_TABS, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: (title, tabbar) => Boolean(tabbar?.titles.some(candidate => candidate !== title && candidate.closable)),
+            execute: (title, tabbar) => tabbar && this.shell.closeTabs(tabbar, candidate => candidate !== title && candidate.closable),
+        }));
+        commandRegistry.registerCommand(CommonCommands.CLOSE_SAVED_TABS, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: (_title, tabbar) => Boolean(tabbar?.titles.some(candidate => candidate.closable && !Saveable.isDirty(candidate.owner))),
+            execute: (_title, tabbar) => tabbar && this.shell.closeTabs(tabbar, candidate => candidate.closable && !Saveable.isDirty(candidate.owner)),
+        }));
+        commandRegistry.registerCommand(CommonCommands.CLOSE_RIGHT_TABS, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: (title, tabbar) => {
+                let targetSeen = false;
+                return Boolean(tabbar?.titles.some(candidate => {
+                    if (targetSeen && candidate.closable) { return true; };
+                    if (candidate === title) { targetSeen = true; };
+                }));
             },
-            execute: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event)!;
-                const currentTitle = this.shell.findTitle(tabBar, event);
-                this.shell.closeTabs(tabBar, title => title === currentTitle);
-            }
-        });
-        commandRegistry.registerCommand(CommonCommands.CLOSE_OTHER_TABS, {
-            isEnabled: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event);
-                if (!tabBar) {
-                    return false;
-                }
-                const currentTitle = this.shell.findTitle(tabBar, event);
-                return tabBar.titles.some(title => title !== currentTitle && title.closable);
-            },
-            execute: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event)!;
-                const currentTitle = this.shell.findTitle(tabBar, event);
-                this.shell.closeTabs(tabBar, title => title !== currentTitle && title.closable);
-            }
-        });
-        commandRegistry.registerCommand(CommonCommands.CLOSE_RIGHT_TABS, {
-            isEnabled: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event);
-                if (!tabBar) {
-                    return false;
-                }
-                const currentIndex = this.findTitleIndex(tabBar, event);
-                return tabBar.titles.some((title, index) => index > currentIndex && title.closable);
-            },
-            isVisible: (event?: Event) => {
-                const area = this.findTabArea(event);
+            isVisible: (_title, tabbar) => {
+                const area = (tabbar && this.shell.getAreaFor(tabbar)) ?? this.shell.currentTabArea;
                 return area !== undefined && area !== 'left' && area !== 'right';
             },
-            execute: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event)!;
-                const currentIndex = this.findTitleIndex(tabBar, event);
-                this.shell.closeTabs(tabBar, (title, index) => index > currentIndex && title.closable);
+            execute: (title, tabbar) => {
+                if (tabbar) {
+                    let targetSeen = false;
+                    this.shell.closeTabs(tabbar, candidate => {
+                        if (targetSeen && candidate.closable) { return true; };
+                        if (candidate === title) { targetSeen = true; };
+                        return false;
+                    });
+                }
             }
-        });
-        commandRegistry.registerCommand(CommonCommands.CLOSE_ALL_TABS, {
-            isEnabled: (event?: Event) => {
-                const tabBar = this.shell.findTabBar(event);
-                return tabBar !== undefined && tabBar.titles.some(title => title.closable);
-            },
-            execute: (event?: Event) => this.shell.closeTabs(this.shell.findTabBar(event)!, title => title.closable)
-        });
+        }));
+        commandRegistry.registerCommand(CommonCommands.CLOSE_ALL_TABS, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: (_title, tabbar) => Boolean(tabbar?.titles.some(title => title.closable)),
+            execute: (_title, tabbar) => tabbar && this.shell.closeTabs(tabbar, candidate => candidate.closable),
+        }));
         commandRegistry.registerCommand(CommonCommands.CLOSE_MAIN_TAB, {
             isEnabled: () => {
                 const currentWidget = this.shell.getCurrentWidget('main');
@@ -763,11 +846,11 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             isEnabled: () => this.shell.mainAreaTabBars.some(tb => tb.titles.some(title => title.closable)),
             execute: () => this.shell.closeTabs('main', title => title.closable)
         });
-        commandRegistry.registerCommand(CommonCommands.COLLAPSE_PANEL, {
-            isEnabled: (event?: Event) => ApplicationShell.isSideArea(this.findTabArea(event)),
-            isVisible: (event?: Event) => ApplicationShell.isSideArea(this.findTabArea(event)),
-            execute: (event?: Event) => this.shell.collapsePanel(this.findTabArea(event)!)
-        });
+        commandRegistry.registerCommand(CommonCommands.COLLAPSE_PANEL, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: (_title, tabbar) => Boolean(tabbar && ApplicationShell.isSideArea(this.shell.getAreaFor(tabbar))),
+            isVisible: (_title, tabbar) => Boolean(tabbar && ApplicationShell.isSideArea(this.shell.getAreaFor(tabbar))),
+            execute: (_title, tabbar) => tabbar && this.shell.collapsePanel(this.shell.getAreaFor(tabbar)!)
+        }));
         commandRegistry.registerCommand(CommonCommands.COLLAPSE_ALL_PANELS, {
             execute: () => {
                 this.shell.collapsePanel('left');
@@ -788,17 +871,30 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         commandRegistry.registerCommand(CommonCommands.TOGGLE_STATUS_BAR, {
             execute: () => this.preferenceService.updateValue('workbench.statusBar.visible', !this.preferences['workbench.statusBar.visible'])
         });
-        commandRegistry.registerCommand(CommonCommands.TOGGLE_MAXIMIZED, {
-            isEnabled: (event?: Event) => this.canToggleMaximized(event),
-            isVisible: (event?: Event) => this.canToggleMaximized(event),
-            execute: (event?: Event) => this.toggleMaximized(event)
+        commandRegistry.registerCommand(CommonCommands.TOGGLE_MAXIMIZED, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: title => Boolean(title?.owner && this.shell.canToggleMaximized(title?.owner)),
+            isVisible: title => Boolean(title?.owner && this.shell.canToggleMaximized(title?.owner)),
+            execute: title => title?.owner && this.shell.toggleMaximized(title?.owner),
+        }));
+        commandRegistry.registerCommand(CommonCommands.SHOW_MENU_BAR, {
+            isEnabled: () => !isOSX,
+            isVisible: () => !isOSX,
+            execute: () => {
+                const menuBarVisibility = 'window.menuBarVisibility';
+                const visibility = this.preferences[menuBarVisibility];
+                if (visibility !== 'compact') {
+                    this.preferenceService.updateValue(menuBarVisibility, 'compact');
+                } else {
+                    this.preferenceService.updateValue(menuBarVisibility, 'classic');
+                }
+            }
         });
 
         commandRegistry.registerCommand(CommonCommands.SAVE, {
-            execute: () => this.shell.save({ formatType: FormatType.ON })
+            execute: () => this.save({ formatType: FormatType.ON })
         });
         commandRegistry.registerCommand(CommonCommands.SAVE_WITHOUT_FORMATTING, {
-            execute: () => this.shell.save({ formatType: FormatType.OFF })
+            execute: () => this.save({ formatType: FormatType.OFF })
         });
         commandRegistry.registerCommand(CommonCommands.SAVE_ALL, {
             execute: () => this.shell.saveAll({ formatType: FormatType.DIRTY })
@@ -817,71 +913,28 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         commandRegistry.registerCommand(CommonCommands.SELECT_ICON_THEME, {
             execute: () => this.selectIconTheme()
         });
-
+        commandRegistry.registerCommand(CommonCommands.PIN_TAB, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: title => Boolean(title && !isPinned(title)),
+            execute: title => this.togglePinned(title),
+        }));
+        commandRegistry.registerCommand(CommonCommands.UNPIN_TAB, new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: title => Boolean(title && isPinned(title)),
+            execute: title => this.togglePinned(title),
+        }));
         commandRegistry.registerCommand(CommonCommands.CONFIGURE_DISPLAY_LANGUAGE, {
             execute: () => this.configureDisplayLanguage()
         });
     }
 
-    private findTabArea(event?: Event): ApplicationShell.Area | undefined {
-        const tabBar = this.shell.findTabBar(event);
-        if (tabBar) {
-            return this.shell.getAreaFor(tabBar);
-        }
-        return this.shell.currentTabArea;
-    }
-
-    /**
-     * Finds the index of the selected title from the tab-bar.
-     * @param tabBar: used for providing an array of titles.
-     * @returns the index of the selected title if it is available in the tab-bar, else returns the index of currently-selected title.
-     */
-    private findTitleIndex(tabBar: TabBar<Widget>, event?: Event): number {
-        if (event) {
-            const targetTitle = this.shell.findTitle(tabBar, event);
-            return targetTitle ? tabBar.titles.indexOf(targetTitle) : tabBar.currentIndex;
-        }
-        return tabBar.currentIndex;
-    }
-
-    private canToggleMaximized(event?: Event): boolean {
-        if (event?.target instanceof HTMLElement) {
-            const widget = this.shell.findWidgetForElement(event.target);
-            if (widget) {
-                return this.shell.mainPanel.contains(widget) || this.shell.bottomPanel.contains(widget);
-            }
-        }
-        return this.shell.canToggleMaximized();
-    }
-
-    /**
-     * Maximize the bottom or the main dockpanel based on the widget.
-     * @param event used to find the selected widget.
-     */
-    private toggleMaximized(event?: Event): void {
-        if (event?.target instanceof HTMLElement) {
-            const widget = this.shell.findWidgetForElement(event.target);
-            if (widget) {
-                if (this.shell.mainPanel.contains(widget)) {
-                    this.shell.mainPanel.toggleMaximized();
-                } else if (this.shell.bottomPanel.contains(widget)) {
-                    this.shell.bottomPanel.toggleMaximized();
-                }
-                if (widget instanceof TabBar) {
-                    // reveals the widget when maximized.
-                    const title = this.shell.findTitle(widget, event);
-                    if (title) {
-                        this.shell.revealWidget(title.owner.id);
-                    }
-                }
-            }
-        } else {
-            this.shell.toggleMaximized();
-        }
-    }
-
-    private isElectron(): boolean {
+    protected isElectron(): boolean {
         return environment.electron.is();
+    }
+
+    protected togglePinned(title?: Title<Widget>): void {
+        if (title) {
+            togglePinned(title);
+            this.updatePinnedKey();
+        }
     }
 
     registerKeybindings(registry: KeybindingRegistry): void {
@@ -993,8 +1046,23 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             {
                 command: CommonCommands.SELECT_COLOR_THEME.id,
                 keybinding: 'ctrlcmd+k ctrlcmd+t'
+            },
+            {
+                command: CommonCommands.PIN_TAB.id,
+                keybinding: 'ctrlcmd+k shift+enter',
+                when: '!activeEditorIsPinned'
+            },
+            {
+                command: CommonCommands.UNPIN_TAB.id,
+                keybinding: 'ctrlcmd+k shift+enter',
+                when: 'activeEditorIsPinned'
             }
         );
+    }
+
+    protected async save(options?: SaveOptions): Promise<void> {
+        const widget = this.shell.currentWidget;
+        this.saveResourceService.save(widget, options);
     }
 
     protected async openAbout(): Promise<void> {
@@ -1024,10 +1092,10 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         });
     }
 
-    onWillStop(): true | undefined {
+    onWillStop(): OnWillStopAction | undefined {
         try {
             if (this.shouldPreventClose || this.shell.canSaveAll()) {
-                return true;
+                return { reason: 'Dirty editors present', action: () => confirmExit() };
             }
         } finally {
             this.shouldPreventClose = false;
@@ -1040,10 +1108,11 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         for (const additionalLanguage of ['en', ...availableLanguages]) {
             items.push({
                 label: additionalLanguage,
-                execute: () => {
-                    if (additionalLanguage !== nls.locale) {
+                execute: async () => {
+                    if (additionalLanguage !== nls.locale && await this.confirmRestart()) {
+                        this.windowService.setSafeToShutDown();
                         window.localStorage.setItem(nls.localeId, additionalLanguage);
-                        window.location.reload();
+                        this.windowService.reload();
                     }
                 }
             });
@@ -1053,6 +1122,16 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
                 placeholder: CommonCommands.CONFIGURE_DISPLAY_LANGUAGE.label,
                 activeItem: items.find(item => item.label === (nls.locale || 'en'))
             });
+    }
+
+    protected async confirmRestart(): Promise<boolean> {
+        const shouldRestart = await new ConfirmDialog({
+            title: nls.localizeByDefault('A restart is required for the change in display language to take effect.'),
+            msg: nls.localizeByDefault('Press the restart button to restart {0} and change the display language.', FrontendApplicationConfigProvider.get().applicationName),
+            ok: nls.localizeByDefault('Restart'),
+            cancel: Dialog.CANCEL,
+        }).open();
+        return shouldRestart === true;
     }
 
     protected selectIconTheme(): void {
@@ -1076,7 +1155,7 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
 
         this.quickInputService?.showQuickPick(items,
             {
-                placeholder: nls.localize('vscode/extensionsActions/select file icon theme', 'Select File Icon Theme'),
+                placeholder: nls.localizeByDefault('Select File Icon Theme'),
                 activeItem: items.find(item => item.id === resetTo),
                 onDidChangeSelection: (quickPick: QuickPick<QuickPickItem>, selectedItems: Array<QuickPickItem>) => {
                     resetTo = undefined;
@@ -1115,7 +1194,7 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
         const items = [...itemsByTheme.light, ...itemsByTheme.dark, ...itemsByTheme.hc];
         this.quickInputService?.showQuickPick(items,
             {
-                placeholder: nls.localize('vscode/extensionActions/select color theme', 'Select Color Theme (Up/Down Keys to Preview)'),
+                placeholder: nls.localizeByDefault('Select Color Theme (Up/Down Keys to Preview)'),
                 activeItem: items.find((item: QuickPickItem) => item.id === resetTo),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onDidChangeSelection: (quickPick: any, selectedItems: Array<QuickPickItem>) => {
@@ -1140,7 +1219,8 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
             // if not yet contributed by Monaco, check runtime css variables to learn
             { id: 'selection.background', defaults: { dark: '#217daf', light: '#c0dbf1' }, description: 'Overall border color for focused elements. This color is only used if not overridden by a component.' },
             { id: 'icon.foreground', defaults: { dark: '#C5C5C5', light: '#424242', hc: '#FFFFFF' }, description: 'The default color for icons in the workbench.' },
-
+            { id: 'sash.hoverBorder', defaults: { dark: Color.transparent('focusBorder', 0.99), light: Color.transparent('focusBorder', 0.99), hc: Color.transparent('focusBorder', 0.99) }, description: 'The hover border color for draggable sashes.' },
+            { id: 'sash.activeBorder', defaults: { dark: 'focusBorder', light: 'focusBorder', hc: 'focusBorder' }, description: 'The active border color for draggable sashes.' },
             // Window border colors should be aligned with https://code.visualstudio.com/api/references/theme-color#window-border
             {
                 id: 'window.activeBorder', defaults: {
@@ -1725,6 +1805,33 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
                     dark: 'input.border', light: 'input.border', hc: 'input.border'
                 }, description: 'Settings editor number input box border.'
             },
+            {
+                id: 'settings.focusedRowBackground', defaults: {
+                    dark: Color.transparent('#808080', 0.14),
+                    light: Color.transparent('#808080', 0.03),
+                    hc: undefined
+                }, description: 'The background color of a settings row when focused.'
+            },
+            {
+                id: 'settings.rowHoverBackground', defaults: {
+                    dark: Color.transparent('#808080', 0.07),
+                    light: Color.transparent('#808080', 0.05),
+                    hc: undefined
+                }, description: 'The background color of a settings row when hovered.'
+            },
+            {
+                id: 'settings.focusedRowBorder', defaults: {
+                    dark: Color.rgba(255, 255, 255, 0.12),
+                    light: Color.rgba(0, 0, 0, 0.12),
+                    hc: 'focusBorder'
+                }, description: "The color of the row's top and bottom border when the row is focused."
+            },
+            // Toolbar Action colors should be aligned with https://code.visualstudio.com/api/references/theme-color#action-colors
+            {
+                id: 'toolbar.hoverBackground', defaults: {
+                    dark: '#5a5d5e50', light: '#b8b8b850', hc: undefined
+                }, description: 'Toolbar background when hovering over actions using the mouse.'
+            },
 
             // Theia Variable colors
             {
@@ -2006,7 +2113,23 @@ export class CommonFrontendContribution implements FrontendApplicationContributi
                     hc: 'editorWidget.background',
                 },
                 description: 'Background color of breadcrumb item picker'
-            }
+            },
+            {
+                id: 'mainToolbar.background',
+                defaults: {
+                    dark: Color.lighten('activityBar.background', 0.1),
+                    light: Color.darken('activityBar.background', 0.1),
+                    hc: Color.lighten('activityBar.background', 0.1),
+                },
+                description: 'Background color of shell\'s global toolbar'
+            },
+            {
+                id: 'mainToolbar.foreground', defaults: {
+                    dark: Color.darken('activityBar.foreground', 0.1),
+                    light: Color.lighten('activityBar.foreground', 0.1),
+                    hc: Color.lighten('activityBar.foreground', 0.1),
+                }, description: 'Foreground color of active toolbar item',
+            },
         );
     }
 }

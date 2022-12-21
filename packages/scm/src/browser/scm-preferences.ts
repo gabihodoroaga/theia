@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2020 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { interfaces } from '@theia/core/shared/inversify';
 import {
@@ -31,10 +31,10 @@ export const scmPreferenceSchema: PreferenceSchema = {
             type: 'string',
             enum: ['tree', 'list'],
             enumDescriptions: [
-                nls.localize('vscode/scm.contribution/scm.defaultViewMode.tree', 'Show the repository changes as a tree.'),
-                nls.localize('vscode/scm.contribution/scm.defaultViewMode.list', 'Show the repository changes as a list.')
+                nls.localizeByDefault('Show the repository changes as a tree.'),
+                nls.localizeByDefault('Show the repository changes as a list.')
             ],
-            description: nls.localize('vscode/scm.contribution/scm.defaultViewMode', 'Controls the default source control view mode.'),
+            description: nls.localizeByDefault('Controls the default Source Control repository view mode.'),
             default: 'list'
         }
     }

@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 import { injectable } from '@theia/core/shared/inversify';
 import { Message } from '@theia/core/shared/@phosphor/messaging';
 import { codiconArray, Key } from '@theia/core/lib/browser';
@@ -20,6 +20,7 @@ import { AbstractDialog } from '@theia/core/lib/browser/dialogs';
 import '../../../../src/main/browser/dialogs/style/modal-notification.css';
 import { MainMessageItem, MainMessageOptions } from '../../../common/plugin-api-rpc';
 import { FrontendApplicationConfigProvider } from '@theia/core/lib/browser/frontend-application-config-provider';
+import { nls } from '@theia/core/lib/common/nls';
 
 export enum MessageType {
     Error = 'error',
@@ -41,7 +42,7 @@ export class ModalNotification extends AbstractDialog<string | undefined> {
         super({ title: FrontendApplicationConfigProvider.get().applicationName });
     }
 
-    protected onCloseRequest(msg: Message): void {
+    protected override onCloseRequest(msg: Message): void {
         this.actionTitle = undefined;
         this.accept();
     }
@@ -91,7 +92,7 @@ export class ModalNotification extends AbstractDialog<string | undefined> {
         if (actions.length <= 0) {
             this.appendAcceptButton();
         } else if (!actions.some(action => action.isCloseAffordance === true)) {
-            this.appendCloseButton('Close');
+            this.appendCloseButton(nls.localizeByDefault('Close'));
         }
 
         return messageNode;

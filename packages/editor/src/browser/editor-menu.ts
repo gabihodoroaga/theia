@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable } from '@theia/core/shared/inversify';
 import { MenuContribution, MenuModelRegistry, MenuPath, MAIN_MENU_BAR } from '@theia/core';
@@ -87,7 +87,7 @@ export class EditorMenuContribution implements MenuContribution {
         });
 
         // Editor navigation. Go > Back and Go > Forward.
-        registry.registerSubmenu(EditorMainMenu.GO, nls.localize('vscode/menubar/mGoto', 'Go'));
+        registry.registerSubmenu(EditorMainMenu.GO, nls.localizeByDefault('Go'));
         registry.registerMenuAction(EditorMainMenu.NAVIGATION_GROUP, {
             commandId: EditorCommands.GO_BACK.id,
             label: EditorCommands.GO_BACK.label,
@@ -100,7 +100,7 @@ export class EditorMenuContribution implements MenuContribution {
         });
         registry.registerMenuAction(EditorMainMenu.NAVIGATION_GROUP, {
             commandId: EditorCommands.GO_LAST_EDIT.id,
-            label: nls.localize('vscode/editor.contribution/miLastEditLocation', 'Last Edit Location'),
+            label: nls.localizeByDefault('Last Edit Location'),
             order: '3'
         });
 
@@ -127,9 +127,46 @@ export class EditorMenuContribution implements MenuContribution {
         });
         registry.registerMenuAction(CommonMenus.FILE_CLOSE, {
             commandId: CommonCommands.CLOSE_MAIN_TAB.id,
-            label: nls.localize('vscode/editor.contribution/closeEditor', 'Close Editor'),
+            label: nls.localizeByDefault('Close Editor'),
             order: '1'
         });
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_RIGHT.id,
+            label: nls.localizeByDefault('Split Editor Right'),
+            order: '0'
+        });
+
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_LEFT.id,
+            label: nls.localizeByDefault('Split Editor Left'),
+            order: '1'
+        });
+
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_UP.id,
+            label: nls.localizeByDefault('Split Editor Up'),
+            order: '2'
+        });
+
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_DOWN.id,
+            label: nls.localizeByDefault('Split Editor Down'),
+            order: '3'
+        });
+
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_ORTHO, {
+            commandId: EditorCommands.SPLIT_EDITOR_HORIZONTAL.id,
+            label: nls.localize('theia/editor/splitHorizontal', 'Split Editor Horizontal'),
+            order: '1'
+        });
+
+        registry.registerMenuAction(CommonMenus.VIEW_EDITOR_SUBMENU_ORTHO, {
+            commandId: EditorCommands.SPLIT_EDITOR_VERTICAL.id,
+            label: nls.localize('theia/editor/splitVertical', 'Split Editor Vertical'),
+            order: '2'
+        });
+
+        registry.registerSubmenu(CommonMenus.VIEW_EDITOR_SUBMENU, nls.localizeByDefault('Editor Layout'));
     }
 
 }

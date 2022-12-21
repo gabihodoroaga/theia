@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { CommandRegistry, Command, MenuModelRegistry, SelectionService, MessageService } from '@theia/core/lib/common';
 import { FrontendApplication, AbstractViewContribution, codicon, open, OpenerService } from '@theia/core/lib/browser';
@@ -41,36 +41,35 @@ export namespace GitDiffCommands {
     export const OPEN_FILE_DIFF = Command.toLocalizedCommand({
         id: 'git-diff:open-file-diff',
         category: 'Git Diff',
-        originalLabel: 'Compare With...',
-        label: nls.localize('vscode/fileActions/globalCompareFile', 'Compare With...')
-    });
+        label: 'Compare With...'
+    }, 'theia/git/compareWith');
     export const TREE_VIEW_MODE = {
         id: 'git.viewmode.tree',
-        tooltip: nls.localize('vscode/scmViewPane/viewModeTree', 'Toggle to Tree View'),
+        tooltip: nls.localizeByDefault('View as Tree'),
         iconClass: codicon('list-tree'),
-        originalLabel: 'Toggle to Tree View',
-        label: nls.localize('vscode/scmViewPane/viewModeTree', 'Toggle to Tree View')
+        originalLabel: 'View as Tree',
+        label: nls.localizeByDefault('View as Tree')
     };
     export const LIST_VIEW_MODE = {
         id: 'git.viewmode.list',
-        tooltip: nls.localize('vscode/scmViewPane/viewModeList', 'Toggle to List View'),
+        tooltip: nls.localizeByDefault('View as List'),
         iconClass: codicon('list-flat'),
-        originalLabel: 'Toggle to List View',
-        label: nls.localize('vscode/scmViewPane/viewModeList', 'Toggle to List View')
+        originalLabel: 'View as List',
+        label: nls.localizeByDefault('View as List')
     };
     export const PREVIOUS_CHANGE = {
         id: 'git.navigate-changes.previous',
-        tooltip: nls.localize('vscode/editor.contribution/navigate.prev.label', 'Previous Change'),
+        tooltip: nls.localizeByDefault('Previous Change'),
         iconClass: codicon('arrow-left'),
         originalLabel: 'Previous Change',
-        label: nls.localize('vscode/editor.contribution/navigate.prev.label', 'Previous Change')
+        label: nls.localizeByDefault('Previous Change')
     };
     export const NEXT_CHANGE = {
         id: 'git.navigate-changes.next',
-        tooltip: nls.localize('vscode/editor.contribution/navigate.next.label', 'Next Change'),
+        tooltip: nls.localizeByDefault('Next Change'),
         iconClass: codicon('arrow-right'),
         originalLabel: 'Next Change',
-        label: nls.localize('vscode/editor.contribution/navigate.next.label', 'Next Change')
+        label: nls.localizeByDefault('Next Change')
     };
 }
 
@@ -95,7 +94,7 @@ export class GitDiffContribution extends AbstractViewContribution<GitDiffWidget>
 
     constructor(
         @inject(SelectionService) protected readonly selectionService: SelectionService,
-        @inject(WidgetManager) protected readonly widgetManager: WidgetManager,
+        @inject(WidgetManager) protected override readonly widgetManager: WidgetManager,
         @inject(FrontendApplication) protected readonly app: FrontendApplication,
         @inject(GitQuickOpenService) protected readonly quickOpenService: GitQuickOpenService,
         @inject(FileService) protected readonly fileService: FileService,
@@ -113,13 +112,13 @@ export class GitDiffContribution extends AbstractViewContribution<GitDiffWidget>
         });
     }
 
-    registerMenus(menus: MenuModelRegistry): void {
+    override registerMenus(menus: MenuModelRegistry): void {
         menus.registerMenuAction(NavigatorContextMenu.COMPARE, {
             commandId: GitDiffCommands.OPEN_FILE_DIFF.id
         });
     }
 
-    registerCommands(commands: CommandRegistry): void {
+    override registerCommands(commands: CommandRegistry): void {
         commands.registerCommand(GitDiffCommands.OPEN_FILE_DIFF, this.newWorkspaceRootUriAwareCommandHandler({
             isVisible: uri => !!this.findGitRepository(uri),
             isEnabled: uri => !!this.findGitRepository(uri),

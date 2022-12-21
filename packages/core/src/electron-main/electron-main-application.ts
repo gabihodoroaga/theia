@@ -1,21 +1,22 @@
-/********************************************************************************
- * Copyright (C) 2020 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, named } from 'inversify';
-import { screen, globalShortcut, ipcMain, app, BrowserWindow, BrowserWindowConstructorOptions, Event as ElectronEvent } from '../../shared/electron';
+import * as electronRemoteMain from '../../electron-shared/@electron/remote/main';
+import { screen, ipcMain, app, BrowserWindow, Event as ElectronEvent } from '../../electron-shared/electron';
 import * as path from 'path';
 import { Argv } from 'yargs';
 import { AddressInfo } from 'net';
@@ -30,19 +31,21 @@ import { ContributionProvider } from '../common/contribution-provider';
 import { ElectronSecurityTokenService } from './electron-security-token-service';
 import { ElectronSecurityToken } from '../electron-common/electron-token';
 import Storage = require('electron-store');
-import { isOSX, isWindows } from '../common';
-import { RequestTitleBarStyle, Restart, TitleBarStyleAtStartup, TitleBarStyleChanged } from '../electron-common/messaging/electron-messages';
+import { Disposable, DisposableCollection, isOSX, isWindows } from '../common';
+import {
+    RequestTitleBarStyle,
+    Restart, StopReason,
+    TitleBarStyleAtStartup,
+    TitleBarStyleChanged
+} from '../electron-common/messaging/electron-messages';
 import { DEFAULT_WINDOW_HASH } from '../common/window';
+import { TheiaBrowserWindowOptions, TheiaElectronWindow, TheiaElectronWindowFactory } from './theia-electron-window';
+import { ElectronMainApplicationGlobals } from './electron-main-constants';
+import { createDisposableListener } from './event-utils';
+
+export { ElectronMainApplicationGlobals };
 
 const createYargs: (argv?: string[], cwd?: string) => Argv = require('yargs/yargs');
-
-/**
- * Theia tracks the maximized state of Electron Browser Windows.
- */
-export interface TheiaBrowserWindowOptions extends BrowserWindowConstructorOptions {
-    isMaximized?: boolean;
-    isFullScreen?: boolean;
-}
 
 /**
  * Options passed to the main/default command handler.
@@ -67,13 +70,6 @@ export interface ElectronMainExecutionParams {
     readonly secondInstance: boolean;
     readonly argv: string[];
     readonly cwd: string;
-}
-
-export const ElectronMainApplicationGlobals = Symbol('ElectronMainApplicationGlobals');
-export interface ElectronMainApplicationGlobals {
-    readonly THEIA_APP_PROJECT_PATH: string
-    readonly THEIA_BACKEND_MAIN_PATH: string
-    readonly THEIA_FRONTEND_HTML_PATH: string
 }
 
 /**
@@ -177,7 +173,12 @@ export class ElectronMainApplication {
     @inject(ElectronSecurityToken)
     protected readonly electronSecurityToken: ElectronSecurityToken;
 
-    protected readonly electronStore = new Storage();
+    @inject(TheiaElectronWindowFactory)
+    protected readonly windowFactory: TheiaElectronWindowFactory;
+
+    protected readonly electronStore = new Storage<{
+        windowstate?: TheiaBrowserWindowOptions
+    }>();
 
     protected readonly _backendPort = new Deferred<number>();
     readonly backendPort = this._backendPort.promise;
@@ -185,6 +186,7 @@ export class ElectronMainApplication {
     protected _config: FrontendApplicationConfig | undefined;
     protected useNativeWindowFrame: boolean = true;
     protected didUseNativeWindowFrameOnStart = new Map<number, boolean>();
+    protected windows = new Map<number, TheiaElectronWindow>();
     protected restarting = false;
 
     get config(): FrontendApplicationConfig {
@@ -244,21 +246,24 @@ export class ElectronMainApplication {
     async createWindow(asyncOptions: MaybePromise<TheiaBrowserWindowOptions> = this.getDefaultTheiaWindowOptions()): Promise<BrowserWindow> {
         let options = await asyncOptions;
         options = this.avoidOverlap(options);
-        const electronWindow = new BrowserWindow(options);
-        electronWindow.setMenuBarVisibility(false);
-        this.attachReadyToShow(electronWindow);
-        this.attachSaveWindowState(electronWindow);
-        this.attachGlobalShortcuts(electronWindow);
-        this.restoreMaximizedState(electronWindow, options);
-        return electronWindow;
+        const electronWindow = this.windowFactory(options, this.config);
+        const { window: { id } } = electronWindow;
+        this.windows.set(id, electronWindow);
+        electronWindow.onDidClose(() => this.windows.delete(id));
+        this.attachSaveWindowState(electronWindow.window);
+        electronRemoteMain.enable(electronWindow.window.webContents);
+        return electronWindow.window;
     }
 
     async getLastWindowOptions(): Promise<TheiaBrowserWindowOptions> {
-        const windowState: TheiaBrowserWindowOptions | undefined = this.electronStore.get('windowstate') || this.getDefaultTheiaWindowOptions();
+        const previousWindowState: TheiaBrowserWindowOptions | undefined = this.electronStore.get('windowstate');
+        const windowState = previousWindowState?.screenLayout === this.getCurrentScreenLayout()
+            ? previousWindowState
+            : this.getDefaultTheiaWindowOptions();
         return {
             frame: this.useNativeWindowFrame,
-            ...windowState,
-            ...this.getDefaultOptions()
+            ...this.getDefaultOptions(),
+            ...windowState
         };
     }
 
@@ -285,6 +290,8 @@ export class ElectronMainApplication {
             minWidth: 200,
             minHeight: 120,
             webPreferences: {
+                // `global` is undefined when `true`.
+                contextIsolation: false,
                 // https://github.com/eclipse-theia/theia/issues/2018
                 nodeIntegration: true,
                 // Setting the following option to `true` causes some features to break, somehow.
@@ -363,16 +370,10 @@ export class ElectronMainApplication {
     }
 
     /**
-     * Only show the window when the content is ready.
-     */
-    protected attachReadyToShow(electronWindow: BrowserWindow): void {
-        electronWindow.on('ready-to-show', () => electronWindow.show());
-    }
-
-    /**
      * Save the window geometry state on every change.
      */
     protected attachSaveWindowState(electronWindow: BrowserWindow): void {
+        const windowStateListeners = new DisposableCollection();
         let delayedSaveTimeout: NodeJS.Timer | undefined;
         const saveWindowStateDelayed = () => {
             if (delayedSaveTimeout) {
@@ -380,13 +381,14 @@ export class ElectronMainApplication {
             }
             delayedSaveTimeout = setTimeout(() => this.saveWindowState(electronWindow), 1000);
         };
-        electronWindow.on('close', () => {
+        createDisposableListener(electronWindow, 'close', () => {
             this.saveWindowState(electronWindow);
-            this.didUseNativeWindowFrameOnStart.delete(electronWindow.id);
-        });
-        electronWindow.on('resize', saveWindowStateDelayed);
-        electronWindow.on('move', saveWindowStateDelayed);
+        }, windowStateListeners);
+        createDisposableListener(electronWindow, 'resize', saveWindowStateDelayed, windowStateListeners);
+        createDisposableListener(electronWindow, 'move', saveWindowStateDelayed, windowStateListeners);
+        windowStateListeners.push(Disposable.create(() => { try { this.didUseNativeWindowFrameOnStart.delete(electronWindow.id); } catch { } }));
         this.didUseNativeWindowFrameOnStart.set(electronWindow.id, this.useNativeWindowFrame);
+        electronWindow.once('closed', () => windowStateListeners.dispose());
     }
 
     protected saveWindowState(electronWindow: BrowserWindow): void {
@@ -396,45 +398,29 @@ export class ElectronMainApplication {
         }
         try {
             const bounds = electronWindow.getBounds();
-            this.electronStore.set('windowstate', {
+            const options: TheiaBrowserWindowOptions = {
                 isFullScreen: electronWindow.isFullScreen(),
                 isMaximized: electronWindow.isMaximized(),
                 width: bounds.width,
                 height: bounds.height,
                 x: bounds.x,
                 y: bounds.y,
-                frame: this.useNativeWindowFrame
-            });
+                frame: this.useNativeWindowFrame,
+                screenLayout: this.getCurrentScreenLayout(),
+            };
+            this.electronStore.set('windowstate', options);
         } catch (e) {
             console.error('Error while saving window state:', e);
         }
     }
 
     /**
-     * Catch certain keybindings to prevent reloading the window using keyboard shortcuts.
+     * Return a string unique to the current display layout.
      */
-    protected attachGlobalShortcuts(electronWindow: BrowserWindow): void {
-        if (this.config.electron?.disallowReloadKeybinding) {
-            const accelerators = ['CmdOrCtrl+R', 'F5'];
-            electronWindow.on('focus', () => {
-                for (const accelerator of accelerators) {
-                    globalShortcut.register(accelerator, () => { });
-                }
-            });
-            electronWindow.on('blur', () => {
-                for (const accelerator of accelerators) {
-                    globalShortcut.unregister(accelerator);
-                }
-            });
-        }
-    }
-
-    protected restoreMaximizedState(electronWindow: BrowserWindow, options: TheiaBrowserWindowOptions): void {
-        if (options.isMaximized) {
-            electronWindow.maximize();
-        } else {
-            electronWindow.unmaximize();
-        }
+    protected getCurrentScreenLayout(): string {
+        return screen.getAllDisplays().map(
+            display => `${display.bounds.x}:${display.bounds.y}:${display.bounds.width}:${display.bounds.height}`
+        ).sort().join('-');
     }
 
     /**
@@ -515,7 +501,12 @@ export class ElectronMainApplication {
 
         ipcMain.on(TitleBarStyleChanged, ({ sender }, titleBarStyle: string) => {
             this.useNativeWindowFrame = titleBarStyle === 'native';
-            this.saveWindowState(BrowserWindow.fromId(sender.id)!);
+            const browserWindow = BrowserWindow.fromId(sender.id);
+            if (browserWindow) {
+                this.saveWindowState(browserWindow);
+            } else {
+                console.warn(`no BrowserWindow with id: ${sender.id}`);
+            }
         });
 
         ipcMain.on(Restart, ({ sender }) => {
@@ -548,18 +539,25 @@ export class ElectronMainApplication {
         }
     }
 
-    protected restart(id: number): void {
+    protected async restart(id: number): Promise<void> {
         this.restarting = true;
-        const window = BrowserWindow.fromId(id)!;
-        window.on('closed', async () => {
-            await this.launch({
-                secondInstance: false,
-                argv: this.processArgv.getProcessArgvWithoutBin(process.argv),
-                cwd: process.cwd()
+        const window = BrowserWindow.fromId(id);
+        const wrapper = this.windows.get(window?.id as number); // If it's not a number, we won't get anything.
+        if (wrapper) {
+            const listener = wrapper.onDidClose(async () => {
+                listener.dispose();
+                await this.launch({
+                    secondInstance: false,
+                    argv: this.processArgv.getProcessArgvWithoutBin(process.argv),
+                    cwd: process.cwd()
+                });
+                this.restarting = false;
             });
-            this.restarting = false;
-        });
-        window.close();
+            // If close failed or was cancelled on this occasion, don't keep listening for it.
+            if (!await wrapper.close(StopReason.Restart)) {
+                listener.dispose();
+            }
+        }
     }
 
     protected async startContributions(): Promise<void> {

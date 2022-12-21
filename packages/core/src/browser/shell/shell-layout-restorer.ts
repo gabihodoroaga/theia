@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject, named } from 'inversify';
 import { Widget } from '@phosphor/widgets';
@@ -26,6 +26,7 @@ import { ContributionProvider } from '../../common/contribution-provider';
 import { MaybePromise } from '../../common/types';
 import { ApplicationShell, applicationShellLayoutVersion, ApplicationShellLayoutVersion } from './application-shell';
 import { CommonCommands } from '../common-frontend-contribution';
+import { WindowService } from '../window/window-service';
 
 /**
  * A contract for widgets that want to store and restore their inner state, between sessions.
@@ -125,6 +126,9 @@ export class ShellLayoutRestorer implements CommandContribution {
     @inject(ContributionProvider) @named(ApplicationShellLayoutMigration)
     protected readonly migrations: ContributionProvider<ApplicationShellLayoutMigration>;
 
+    @inject(WindowService)
+    protected readonly windowService: WindowService;
+
     constructor(
         @inject(WidgetManager) protected widgetManager: WidgetManager,
         @inject(ILogger) protected logger: ILogger,
@@ -137,12 +141,14 @@ export class ShellLayoutRestorer implements CommandContribution {
     }
 
     protected async resetLayout(): Promise<void> {
-        this.logger.info('>>> Resetting layout...');
-        this.shouldStoreLayout = false;
-        this.storageService.setData(this.storageKey, undefined);
-        ThemeService.get().reset(); // Theme service cannot use DI, so the current theme ID is stored elsewhere. Hence the explicit reset.
-        this.logger.info('<<< The layout has been successfully reset.');
-        window.location.reload(true);
+        if (await this.windowService.isSafeToShutDown()) {
+            this.logger.info('>>> Resetting layout...');
+            this.shouldStoreLayout = false;
+            this.storageService.setData(this.storageKey, undefined);
+            ThemeService.get().reset(); // Theme service cannot use DI, so the current theme ID is stored elsewhere. Hence the explicit reset.
+            this.logger.info('<<< The layout has been successfully reset.');
+            this.windowService.reload();
+        }
     }
 
     storeLayout(app: FrontendApplication): void {

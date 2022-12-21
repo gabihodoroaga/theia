@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2019 Arm and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2019 Arm and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
@@ -62,20 +62,20 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
         toolbarRegistry.registerItem({
             id: OutputCommands.CLEAR__WIDGET.id,
             command: OutputCommands.CLEAR__WIDGET.id,
-            tooltip: nls.localize('vscode/output.contribution/clearOutput.label', 'Clear Output'),
+            tooltip: nls.localizeByDefault('Clear Output'),
             priority: 1,
         });
         toolbarRegistry.registerItem({
             id: OutputCommands.LOCK__WIDGET.id,
             command: OutputCommands.LOCK__WIDGET.id,
-            tooltip: nls.localize('vscode/output.contribution/outputScrollOff', 'Turn Auto Scrolling Off'),
+            tooltip: nls.localizeByDefault('Turn Auto Scrolling Off'),
             onDidChange: this.onOutputWidgetStateChanged,
             priority: 2
         });
         toolbarRegistry.registerItem({
             id: OutputCommands.UNLOCK__WIDGET.id,
             command: OutputCommands.UNLOCK__WIDGET.id,
-            tooltip: nls.localize('vscode/output.contribution/outputScrollOn', 'Turn Auto Scrolling On'),
+            tooltip: nls.localizeByDefault('Turn Auto Scrolling On'),
             onDidChange: this.onOutputWidgetStateChanged,
             priority: 2
         });

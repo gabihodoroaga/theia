@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, optional, postConstruct } from '@theia/core/shared/inversify';
 import {
@@ -29,7 +29,8 @@ import {
 } from '@theia/core/lib/common';
 import {
     ApplicationShell, KeybindingContribution, KeyCode, Key, WidgetManager,
-    KeybindingRegistry, Widget, LabelProvider, WidgetOpenerOptions, StorageService, QuickInputService, codicon, CommonCommands
+    KeybindingRegistry, Widget, LabelProvider, WidgetOpenerOptions, StorageService,
+    QuickInputService, codicon, CommonCommands, FrontendApplicationContribution, OnWillStopAction, Dialog, ConfirmDialog
 } from '@theia/core/lib/browser';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { TERMINAL_WIDGET_FACTORY_ID, TerminalWidgetFactoryOptions, TerminalWidgetImpl } from './terminal-widget-impl';
@@ -53,6 +54,7 @@ import {
     SerializableExtensionEnvironmentVariableCollection
 } from '../common/base-terminal-protocol';
 import { nls } from '@theia/core/lib/common/nls';
+import { TerminalPreferences } from './terminal-preferences';
 
 export namespace TerminalMenus {
     export const TERMINAL = [...MAIN_MENU_BAR, '7_terminal'];
@@ -65,82 +67,82 @@ export namespace TerminalMenus {
 }
 
 export namespace TerminalCommands {
-    const TERMINAL_CATEGORY_KEY = 'vscode/settingsLayout/terminal';
     const TERMINAL_CATEGORY = 'Terminal';
-    export const NEW = Command.toLocalizedCommand({
+    export const NEW = Command.toDefaultLocalizedCommand({
         id: 'terminal:new',
         category: TERMINAL_CATEGORY,
-        label: 'Open New Terminal'
-    }, 'vscode/terminalActions/workbench.action.terminal.new', TERMINAL_CATEGORY_KEY);
-    export const NEW_ACTIVE_WORKSPACE = Command.toLocalizedCommand({
+        label: 'Create New Integrated Terminal'
+    });
+    export const NEW_ACTIVE_WORKSPACE = Command.toDefaultLocalizedCommand({
         id: 'terminal:new:active:workspace',
         category: TERMINAL_CATEGORY,
-        label: 'Open New Terminal (In Active Workspace)'
-    }, 'vscode/terminalActions/workbench.action.terminal.newInActiveWorkspace', TERMINAL_CATEGORY_KEY);
-    export const TERMINAL_CLEAR = Command.toLocalizedCommand({
+        label: 'Create New Integrated Terminal (In Active Workspace)'
+    });
+    export const TERMINAL_CLEAR = Command.toDefaultLocalizedCommand({
         id: 'terminal:clear',
         category: TERMINAL_CATEGORY,
-        label: 'Clear Terminal'
-    }, 'vscode/terminalActions/workbench.action.terminal.clear', TERMINAL_CATEGORY_KEY);
-    export const TERMINAL_CONTEXT = Command.toLocalizedCommand({
+        label: 'Clear'
+    });
+    export const TERMINAL_CONTEXT = Command.toDefaultLocalizedCommand({
         id: 'terminal:context',
         category: TERMINAL_CATEGORY,
         label: 'Open in Terminal'
-    }, 'vscode/scm.contribution/open in terminal', TERMINAL_CATEGORY_KEY);
-    export const SPLIT = Command.toLocalizedCommand({
+    });
+    export const SPLIT = Command.toDefaultLocalizedCommand({
         id: 'terminal:split',
         category: TERMINAL_CATEGORY,
         label: 'Split Terminal'
-    }, 'vscode/terminalActions/workbench.action.terminal.split', TERMINAL_CATEGORY_KEY);
-    export const TERMINAL_FIND_TEXT = Command.toLocalizedCommand({
+    });
+    export const TERMINAL_FIND_TEXT = Command.toDefaultLocalizedCommand({
         id: 'terminal:find',
         category: TERMINAL_CATEGORY,
         label: 'Find'
-    }, 'vscode/findController/startFindAction', TERMINAL_CATEGORY_KEY);
-    export const TERMINAL_FIND_TEXT_CANCEL = Command.toLocalizedCommand({
+    });
+    export const TERMINAL_FIND_TEXT_CANCEL = Command.toDefaultLocalizedCommand({
         id: 'terminal:find:cancel',
         category: TERMINAL_CATEGORY,
-        label: 'Hide find widget'
-    }, 'vscode/terminalActions/workbench.action.terminal.hideFind', TERMINAL_CATEGORY_KEY);
+        label: 'Hide Find'
+    });
 
-    export const SCROLL_LINE_UP = Command.toLocalizedCommand({
+    export const SCROLL_LINE_UP = Command.toDefaultLocalizedCommand({
         id: 'terminal:scroll:line:up',
         category: TERMINAL_CATEGORY,
-        label: 'Scroll line up'
-    }, 'vscode/terminalActions/workbench.action.terminal.scrollUp', TERMINAL_CATEGORY_KEY);
-    export const SCROLL_LINE_DOWN = Command.toLocalizedCommand({
+        label: 'Scroll Up (Line)'
+    });
+    export const SCROLL_LINE_DOWN = Command.toDefaultLocalizedCommand({
         id: 'terminal:scroll:line:down',
         category: TERMINAL_CATEGORY,
-        label: 'Scroll line down'
-    }, 'vscode/terminalActions/workbench.action.terminal.scrollDown', TERMINAL_CATEGORY_KEY);
-    export const SCROLL_TO_TOP = Command.toLocalizedCommand({
+        label: 'Scroll Down (Line)'
+    });
+    export const SCROLL_TO_TOP = Command.toDefaultLocalizedCommand({
         id: 'terminal:scroll:top',
         category: TERMINAL_CATEGORY,
-        label: 'Scroll to top'
-    }, 'vscode/terminalActions/workbench.action.terminal.scrollToTop', TERMINAL_CATEGORY_KEY);
-    export const SCROLL_PAGE_UP = Command.toLocalizedCommand({
+        label: 'Scroll to Top'
+    });
+    export const SCROLL_PAGE_UP = Command.toDefaultLocalizedCommand({
         id: 'terminal:scroll:page:up',
         category: TERMINAL_CATEGORY,
-        label: 'Scroll page up'
-    }, 'vscode/terminalActions/workbench.action.terminal.scrollUpPage', TERMINAL_CATEGORY_KEY);
-    export const SCROLL_PAGE_DOWN = Command.toLocalizedCommand({
+        label: 'Scroll Up (Page)'
+    });
+    export const SCROLL_PAGE_DOWN = Command.toDefaultLocalizedCommand({
         id: 'terminal:scroll:page:down',
         category: TERMINAL_CATEGORY,
-        label: 'Scroll page down'
-    }, 'vscode/terminalActions/workbench.action.terminal.scrollDownPage', TERMINAL_CATEGORY_KEY);
+        label: 'Scroll Down (Page)'
+    });
 
     /**
      * Command that displays all terminals that are currently opened
      */
-    export const SHOW_ALL_OPENED_TERMINALS = Command.toLocalizedCommand({
+    export const SHOW_ALL_OPENED_TERMINALS = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.showAllTerminals',
         category: CommonCommands.VIEW_CATEGORY,
         label: 'Show All Opened Terminals'
-    }, 'vscode/terminal.contribution/tasksQuickAccessHelp', CommonCommands.VIEW_CATEGORY_KEY);
+    });
 }
 
 @injectable()
-export class TerminalFrontendContribution implements TerminalService, CommandContribution, MenuContribution, KeybindingContribution, TabBarToolbarContribution, ColorContribution {
+export class TerminalFrontendContribution implements FrontendApplicationContribution, TerminalService, CommandContribution, MenuContribution,
+    KeybindingContribution, TabBarToolbarContribution, ColorContribution {
 
     @inject(ApplicationShell) protected readonly shell: ApplicationShell;
     @inject(ShellTerminalServerProxy) protected readonly shellTerminalServer: ShellTerminalServerProxy;
@@ -159,8 +161,12 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
 
     @inject(TerminalWatcher)
     protected readonly terminalWatcher: TerminalWatcher;
+
     @inject(StorageService)
     protected readonly storageService: StorageService;
+
+    @inject(TerminalPreferences)
+    protected terminalPreferences: TerminalPreferences;
 
     protected readonly onDidCreateTerminalEmitter = new Emitter<TerminalWidget>();
     readonly onDidCreateTerminal: Event<TerminalWidget> = this.onDidCreateTerminalEmitter.event;
@@ -173,7 +179,7 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
 
     @postConstruct()
     protected init(): void {
-        this.shell.currentChanged.connect(() => this.updateCurrentTerminal());
+        this.shell.onDidChangeCurrentWidget(() => this.updateCurrentTerminal());
         this.widgetManager.onDidCreateWidget(({ widget }) => {
             if (widget instanceof TerminalWidget) {
                 this.updateCurrentTerminal();
@@ -185,7 +191,7 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
         const terminalFocusKey = this.contextKeyService.createKey<boolean>('terminalFocus', false);
         const updateFocusKey = () => terminalFocusKey.set(this.shell.activeWidget instanceof TerminalWidget);
         updateFocusKey();
-        this.shell.activeChanged.connect(updateFocusKey);
+        this.shell.onDidChangeActiveWidget(updateFocusKey);
 
         this.terminalWatcher.onStoreTerminalEnvVariablesRequested(data => {
             this.storageService.setData(ENVIRONMENT_VARIABLE_COLLECTIONS_KEY, data);
@@ -198,6 +204,40 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
                 }
             });
         });
+    }
+
+    onWillStop(): OnWillStopAction | undefined {
+        const preferenceValue = this.terminalPreferences['terminal.integrated.confirmOnExit'];
+        if (preferenceValue !== 'never') {
+            const allTerminals = this.widgetManager.getWidgets(TERMINAL_WIDGET_FACTORY_ID) as TerminalWidget[];
+            if (allTerminals.length) {
+                return {
+                    action: async () => {
+                        if (preferenceValue === 'always') {
+                            return this.confirmExitWithActiveTerminals(allTerminals.length);
+                        } else {
+                            const activeTerminals = await Promise.all(allTerminals.map(widget => widget.hasChildProcesses()))
+                                .then(hasChildProcesses => hasChildProcesses.filter(hasChild => hasChild));
+                            return activeTerminals.length === 0 || this.confirmExitWithActiveTerminals(activeTerminals.length);
+                        }
+                    },
+                    reason: 'Active integrated terminal',
+                };
+            }
+        }
+    }
+
+    protected async confirmExitWithActiveTerminals(activeTerminalCount: number): Promise<boolean> {
+        const msg = activeTerminalCount === 1
+            ? nls.localize('theia/terminal/terminateActive', 'Do you want to terminate the active terminal session?')
+            : nls.localize('theia/terminal/terminateActiveMultiple', 'Do you want to terminate the {0} active terminal sessions?', activeTerminalCount);
+        const safeToExit = await new ConfirmDialog({
+            title: '',
+            msg,
+            ok: nls.localize('theia/terminal/terminate', 'Terminate'),
+            cancel: Dialog.CANCEL,
+        }).open();
+        return safeToExit === true;
     }
 
     protected _currentTerminal: TerminalWidget | undefined;
@@ -387,14 +427,14 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
         // Open terminal
         const termWidget = await this.newTerminal({ cwd });
         termWidget.start();
-        this.activateTerminal(termWidget);
+        this.open(termWidget);
     }
 
     registerMenus(menus: MenuModelRegistry): void {
         menus.registerSubmenu(TerminalMenus.TERMINAL, TerminalWidgetImpl.LABEL);
         menus.registerMenuAction(TerminalMenus.TERMINAL_NEW, {
             commandId: TerminalCommands.NEW.id,
-            label: nls.localize('vscode/terminalActions/workbench.action.terminal.new.short', 'New Terminal'),
+            label: nls.localizeByDefault('New Terminal'),
             order: '0'
         });
         menus.registerMenuAction(TerminalMenus.TERMINAL_NEW, {
@@ -562,10 +602,6 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
         return widget;
     }
 
-    activateTerminal(widget: TerminalWidget, widgetOptions?: ApplicationShell.WidgetOptions): void {
-        this.open(widget, { widgetOptions });
-    }
-
     // TODO: reuse WidgetOpenHandler.open
     open(widget: TerminalWidget, options?: WidgetOpenerOptions): void {
         const op: WidgetOpenerOptions = {
@@ -600,7 +636,7 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
                     resource
                 }));
                 const selectedItem = await this.quickInputService?.showQuickPick(items, {
-                    placeholder: nls.localize('vscode/terminalActions/workbench.action.terminal.newWorkspacePlaceholder', 'Select current working directory for new terminal')
+                    placeholder: nls.localizeByDefault('Select current working directory for new terminal')
                 });
                 resolve(selectedItem?.resource?.toString());
             }

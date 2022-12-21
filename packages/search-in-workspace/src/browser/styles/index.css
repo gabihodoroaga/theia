@@ -14,8 +14,12 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
- #search-in-workspace {
+#search-in-workspace {
     height: 100%;
+}
+
+#search-in-workspace .theia-TreeContainer.empty {
+    overflow: hidden;
 }
 
 .t-siw-search-container {
@@ -34,7 +38,6 @@
 .t-siw-search-container .theia-input {
     flex: 1;
     line-height: var(--theia-content-line-height);
-    padding-left: 8px;
     padding: 3px 0 3px 4px;
 }
 
@@ -193,6 +196,7 @@
 .t-siw-search-container .result {
     overflow: hidden;
     width: 100%;
+    flex: 1;
 }
 
 .t-siw-search-container .result .result-head {
@@ -266,7 +270,6 @@
 .theia-TreeNode:hover .result-node-buttons {
     display: flex;
     justify-content: flex-end;
-    flex: 1;
     align-items: center;
     align-self: center;
 }

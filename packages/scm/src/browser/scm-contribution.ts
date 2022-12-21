@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2019 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2019 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { Emitter } from '@theia/core/lib/common/event';
 import {
@@ -41,40 +41,43 @@ import { nls } from '@theia/core/lib/common/nls';
 export const SCM_WIDGET_FACTORY_ID = ScmWidget.ID;
 export const SCM_VIEW_CONTAINER_ID = 'scm-view-container';
 export const SCM_VIEW_CONTAINER_TITLE_OPTIONS: ViewContainerTitleOptions = {
-    label: nls.localize('vscode/scm.contribution/source control', 'Source Control'),
+    label: nls.localizeByDefault('Source Control'),
     iconClass: codicon('source-control'),
     closeable: true
 };
 
 export namespace SCM_COMMANDS {
-    export const CHANGE_REPOSITORY = Command.toLocalizedCommand({
+    export const CHANGE_REPOSITORY = {
         id: 'scm.change.repository',
-        category: 'SCM',
-        label: nls.localize('theia/scm/changeRepository', 'Change Repository...')
-    });
+        category: nls.localizeByDefault('SCM'),
+        originalCategory: 'SCM',
+        label: nls.localize('theia/scm/changeRepository', 'Change Repository...'),
+        originalLabel: 'Change Repository...'
+    };
     export const ACCEPT_INPUT = {
         id: 'scm.acceptInput'
     };
     export const TREE_VIEW_MODE = {
         id: 'scm.viewmode.tree',
-        tooltip: nls.localize('vscode/scmViewPane/viewModeTree', 'Toggle to Tree View'),
+        tooltip: nls.localizeByDefault('View as Tree'),
         iconClass: codicon('list-tree'),
-        originalLabel: 'Toggle to Tree View',
-        label: nls.localize('vscode/scmViewPane/viewModeTree', 'Toggle to Tree View')
+        originalLabel: 'View as Tree',
+        label: nls.localizeByDefault('View as Tree')
     };
     export const LIST_VIEW_MODE = {
         id: 'scm.viewmode.list',
-        tooltip: nls.localize('vscode/scmViewPane/viewModeList', 'Toggle to List View'),
+        tooltip: nls.localizeByDefault('View as List'),
         iconClass: codicon('list-flat'),
-        originalLabel: 'Toggle to List View',
-        label: nls.localize('vscode/scmViewPane/viewModeList', 'Toggle to List View')
+        originalLabel: 'View as List',
+        label: nls.localizeByDefault('View as List')
     };
     export const COLLAPSE_ALL = {
         id: 'scm.collapseAll',
-        category: 'SCM',
-        tooltip: nls.localize('vscode/treeView/collapseAll', 'Collapse All'),
+        category: nls.localizeByDefault('SCM'),
+        originalCategory: 'SCM',
+        tooltip: nls.localizeByDefault('Collapse All'),
         iconClass: codicon('collapse-all'),
-        label: nls.localize('vscode/treeView/collapseAll', 'Collapse All'),
+        label: nls.localizeByDefault('Collapse All'),
         originalLabel: 'Collapse All'
     };
 }
@@ -131,14 +134,14 @@ export class ScmContribution extends AbstractViewContribution<ScmWidget> impleme
         this.labelProvider.onDidChange(() => this.updateStatusBar());
 
         this.updateContextKeys();
-        this.shell.currentChanged.connect(() => this.updateContextKeys());
+        this.shell.onDidChangeCurrentWidget(() => this.updateContextKeys());
     }
 
     protected updateContextKeys(): void {
         this.scmFocus.set(this.shell.currentWidget instanceof ScmWidget);
     }
 
-    registerCommands(commandRegistry: CommandRegistry): void {
+    override registerCommands(commandRegistry: CommandRegistry): void {
         super.registerCommands(commandRegistry);
         commandRegistry.registerCommand(SCM_COMMANDS.CHANGE_REPOSITORY, {
             execute: () => this.scmQuickOpenService.changeRepository(),
@@ -200,7 +203,7 @@ export class ScmContribution extends AbstractViewContribution<ScmWidget> impleme
         });
     }
 
-    registerKeybindings(keybindings: KeybindingRegistry): void {
+    override registerKeybindings(keybindings: KeybindingRegistry): void {
         super.registerKeybindings(keybindings);
         keybindings.registerKeybinding({
             command: SCM_COMMANDS.ACCEPT_INPUT.id,

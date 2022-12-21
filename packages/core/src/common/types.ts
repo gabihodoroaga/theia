@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 export type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
@@ -68,8 +68,48 @@ export namespace Prioritizeable {
     }
 }
 
+export namespace ArrayUtils {
+    export interface Head<T> extends Array<T> {
+        head(): T;
+    }
+
+    export interface Tail<T> extends Array<T> {
+        tail(): T;
+    }
+
+    export interface Children<T> extends Array<T> {
+        children(): Tail<T>
+    }
+
+    export const TailImpl = {
+        tail<T>(this: Array<T>): T {
+            return this[this.length - 1];
+        },
+    };
+
+    export const HeadAndChildrenImpl = {
+        head<T>(this: Array<T>): T {
+            return this[0];
+        },
+
+        children<T>(this: Array<T>): Tail<T> {
+            return Object.assign(this.slice(1), TailImpl);
+        }
+    };
+
+    export interface HeadAndTail<T> extends Head<T>, Tail<T>, Children<T> { }
+
+    export function asTail<T>(array: Array<T>): Tail<T> {
+        return Object.assign(array, TailImpl);
+    }
+
+    export function asHeadAndTail<T>(array: Array<T>): HeadAndTail<T> {
+        return Object.assign(array, HeadAndChildrenImpl, TailImpl);
+    }
+}
+
 /**
- * Throws when called and statically make sure that all variants of a type were consumed.
+ * Throws when called and statically makes sure that all variants of a type were consumed.
  */
 export function unreachable(_never: never, message: string = 'unhandled case'): never {
     throw new Error(message);

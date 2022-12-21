@@ -1,31 +1,31 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject } from '@theia/core/shared/inversify';
-import { CommandContribution, CommandRegistry, MenuContribution, MenuModelRegistry, SelectionService, MessageService } from '@theia/core/lib/common';
+import { CommandContribution, CommandRegistry, MenuContribution, MenuModelRegistry, SelectionService, MessageService, isWindows, MaybeArray } from '@theia/core/lib/common';
 import { isOSX, environment, OS } from '@theia/core';
 import {
-    open, OpenerService, CommonMenus, StorageService, LabelProvider,
-    ConfirmDialog, KeybindingRegistry, KeybindingContribution, CommonCommands, FrontendApplicationContribution, ApplicationShell, Saveable, SaveableSource, Widget, Navigatable
+    open, OpenerService, CommonMenus, StorageService, LabelProvider, ConfirmDialog, KeybindingRegistry, KeybindingContribution,
+    CommonCommands, FrontendApplicationContribution, ApplicationShell, Saveable, SaveableSource, Widget, Navigatable, SHELL_TABBAR_CONTEXT_COPY, OnWillStopAction, FormatType
 } from '@theia/core/lib/browser';
 import { FileDialogService, OpenFileDialogProps, FileDialogTreeFilters } from '@theia/filesystem/lib/browser';
 import { ContextKeyService } from '@theia/core/lib/browser/context-key-service';
 import { WorkspaceService } from './workspace-service';
 import { THEIA_EXT, VSCODE_EXT } from '../common';
-import { WorkspaceCommands } from './workspace-commands';
+import { WorkspaceCommands, WorkspaceCommandContribution } from './workspace-commands';
 import { QuickOpenWorkspace } from './quick-open-workspace';
 import { WorkspacePreferences } from './workspace-preferences';
 import URI from '@theia/core/lib/common/uri';
@@ -35,6 +35,9 @@ import { UTF8 } from '@theia/core/lib/common/encodings';
 import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { PreferenceConfigurations } from '@theia/core/lib/browser/preferences/preference-configurations';
 import { nls } from '@theia/core/lib/common/nls';
+import { BinaryBuffer } from '@theia/core/lib/common/buffer';
+import { FileStat } from '@theia/filesystem/lib/common/files';
+import { UntitledWorkspaceExitDialog } from './untitled-workspace-exit-dialog';
 
 export enum WorkspaceStates {
     /**
@@ -51,6 +54,7 @@ export enum WorkspaceStates {
     folder = 'folder',
 };
 export type WorkspaceState = keyof typeof WorkspaceStates;
+export type WorkbenchState = keyof typeof WorkspaceStates;
 
 @injectable()
 export class WorkspaceFrontendContribution implements CommandContribution, KeybindingContribution, MenuContribution, FrontendApplicationContribution {
@@ -67,6 +71,7 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
     @inject(WorkspacePreferences) protected preferences: WorkspacePreferences;
     @inject(SelectionService) protected readonly selectionService: SelectionService;
     @inject(CommandRegistry) protected readonly commandRegistry: CommandRegistry;
+    @inject(WorkspaceCommandContribution) protected readonly workspaceCommands: WorkspaceCommandContribution;
 
     @inject(ContextKeyService)
     protected readonly contextKeyService: ContextKeyService;
@@ -90,11 +95,16 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         const updateWorkspaceStateKey = () => workspaceStateKey.set(this.updateWorkspaceStateKey());
         updateWorkspaceStateKey();
 
+        const workbenchStateKey = this.contextKeyService.createKey<WorkbenchState>('workbenchState', 'empty');
+        const updateWorkbenchStateKey = () => workbenchStateKey.set(this.updateWorkbenchStateKey());
+        updateWorkbenchStateKey();
+
         this.updateStyles();
         this.workspaceService.onWorkspaceChanged(() => {
             this.updateEncodingOverrides();
             updateWorkspaceFolderCountKey();
             updateWorkspaceStateKey();
+            updateWorkbenchStateKey();
             this.updateStyles();
         });
     }
@@ -214,6 +224,11 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         menus.registerMenuAction(CommonMenus.FILE_SAVE, {
             commandId: WorkspaceCommands.SAVE_AS.id,
         });
+
+        menus.registerMenuAction(SHELL_TABBAR_CONTEXT_COPY, {
+            commandId: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id,
+            label: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.label,
+        });
     }
 
     registerKeybindings(keybindings: KeybindingRegistry): void {
@@ -242,6 +257,11 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         keybindings.registerKeybinding({
             command: WorkspaceCommands.SAVE_AS.id,
             keybinding: 'ctrlcmd+shift+s',
+        });
+        keybindings.registerKeybinding({
+            command: WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id,
+            keybinding: isWindows ? 'ctrl+k ctrl+shift+c' : 'ctrlcmd+shift+alt+c',
+            when: '!editorFocus'
         });
     }
 
@@ -298,30 +318,62 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
     }
 
     /**
-     * Opens a folder after prompting the `Open Folder` dialog. Resolves to `undefined`, if
-     *  - the workspace root is not set,
-     *  - the folder to open does not exist, or
-     *  - it was not a directory, but a file resource.
+     * Opens one or more folders after prompting the `Open Folder` dialog. Resolves to `undefined`, if
+     *  - the user's selection is empty or contains only files.
+     *  - the new workspace is equal to the old workspace.
      *
-     * Otherwise, resolves to the URI of the folder.
+     * Otherwise, resolves to the URI of the new workspace:
+     *  - a single folder if a single folder was selected.
+     *  - a new, untitled workspace file if multiple folders were selected.
      */
     protected async doOpenFolder(): Promise<URI | undefined> {
         const props: OpenFileDialogProps = {
             title: WorkspaceCommands.OPEN_FOLDER.dialogLabel,
             canSelectFolders: true,
-            canSelectFiles: false
+            canSelectFiles: false,
+            canSelectMany: this.preferences['workspace.supportMultiRootWorkspace'],
         };
         const [rootStat] = await this.workspaceService.roots;
-        const destinationFolderUri = await this.fileDialogService.showOpenDialog(props, rootStat);
-        if (destinationFolderUri &&
-            this.getCurrentWorkspaceUri()?.toString() !== destinationFolderUri.toString()) {
-            const destinationFolder = await this.fileService.resolve(destinationFolderUri);
-            if (destinationFolder.isDirectory) {
-                this.workspaceService.open(destinationFolderUri);
-                return destinationFolderUri;
-            }
+        const targetFolders = await this.fileDialogService.showOpenDialog(props, rootStat);
+        if (targetFolders) {
+            const openableURI = await this.getOpenableWorkspaceUri(targetFolders);
+            if (openableURI) {
+                if (!this.workspaceService.workspace || !openableURI.isEqual(this.workspaceService.workspace.resource)) {
+                    this.workspaceService.open(openableURI);
+                    return openableURI;
+                }
+            };
         }
         return undefined;
+    }
+
+    protected async getOpenableWorkspaceUri(uris: MaybeArray<URI>): Promise<URI | undefined> {
+        if (Array.isArray(uris)) {
+            if (uris.length < 2) {
+                return uris[0];
+            } else {
+                const foldersToOpen = (await Promise.all(uris.map(uri => this.fileService.resolve(uri))))
+                    .filter(fileStat => !!fileStat?.isDirectory);
+                if (foldersToOpen.length === 1) {
+                    return foldersToOpen[0].resource;
+                } else {
+                    return this.createMultiRootWorkspace(foldersToOpen);
+                }
+            }
+        } else {
+            return uris;
+        }
+    }
+
+    protected async createMultiRootWorkspace(roots: FileStat[]): Promise<URI> {
+        const untitledWorkspace = await this.workspaceService.getUntitledWorkspace();
+        const folders = Array.from(new Set(roots.map(stat => stat.resource.path.toString())), path => ({ path }));
+        const workspaceStat = await this.fileService.createFile(
+            untitledWorkspace,
+            BinaryBuffer.fromString(JSON.stringify({ folders }, null, 4)), // eslint-disable-line no-null/no-null
+            { overwrite: true }
+        );
+        return workspaceStat.resource;
     }
 
     /**
@@ -386,7 +438,10 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         }
     }
 
-    protected async saveWorkspaceAs(): Promise<void> {
+    /**
+     * @returns whether the file was successfully saved.
+     */
+    protected async saveWorkspaceAs(): Promise<boolean> {
         let exist: boolean = false;
         let overwrite: boolean = false;
         let selected: URI | undefined;
@@ -408,8 +463,14 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         } while (selected && exist && !overwrite);
 
         if (selected) {
-            this.workspaceService.save(selected);
+            try {
+                await this.workspaceService.save(selected);
+                return true;
+            } catch {
+                this.messageService.error(nls.localizeByDefault("Unable to save workspace '{0}'", selected.path.toString()));
+            }
         }
+        return false;
     }
 
     /**
@@ -418,7 +479,7 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
      * - `widget.saveable.createSnapshot` is defined.
      * - `widget.saveable.revert` is defined.
      */
-    protected canBeSavedAs(widget: Widget | undefined): widget is Widget & SaveableSource & Navigatable {
+    canBeSavedAs(widget: Widget | undefined): widget is Widget & SaveableSource & Navigatable {
         return widget !== undefined
             && Saveable.isSource(widget)
             && typeof widget.saveable.createSnapshot === 'function'
@@ -430,12 +491,17 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
     /**
      * Save `sourceWidget` to a new file picked by the user.
      */
-    protected async saveAs(sourceWidget: Widget & SaveableSource & Navigatable): Promise<void> {
+    async saveAs(sourceWidget: Widget & SaveableSource & Navigatable): Promise<void> {
         let exist: boolean = false;
         let overwrite: boolean = false;
         let selected: URI | undefined;
-        const uri = sourceWidget.getResourceUri()!;
-        const stat = await this.fileService.resolve(uri);
+        const uri: URI = sourceWidget.getResourceUri()!;
+        let stat;
+        if (uri.scheme === 'file') {
+            stat = await this.fileService.resolve(uri);
+        } else {
+            stat = this.workspaceService.workspace;
+        }
         do {
             selected = await this.fileDialogService.showSaveDialog(
                 {
@@ -469,7 +535,12 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
     private async copyAndSave(sourceWidget: Widget & SaveableSource & Navigatable, target: URI, overwrite: boolean): Promise<void> {
         const snapshot = sourceWidget.saveable.createSnapshot!();
         if (!await this.fileService.exists(target)) {
-            await this.fileService.copy(sourceWidget.getResourceUri()!, target, { overwrite });
+            const sourceUri = sourceWidget.getResourceUri()!;
+            if (this.fileService.canHandleResource(sourceUri)) {
+                await this.fileService.copy(sourceUri, target, { overwrite });
+            } else {
+                await this.fileService.createFile(target);
+            }
         }
         const targetWidget = await open(this.openerService, target);
         const targetSaveable = Saveable.get(targetWidget);
@@ -477,16 +548,23 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
             targetSaveable.applySnapshot(snapshot);
             await sourceWidget.saveable.revert!();
             sourceWidget.close();
-            // At this point `targetWidget` should be `applicationShell.currentWidget` for the save command to pick up:
-            await this.commandRegistry.executeCommand(CommonCommands.SAVE.id);
+            Saveable.save(targetWidget, { formatType: FormatType.ON });
         } else {
             this.messageService.error(nls.localize('theia/workspace/failApply', 'Could not apply changes to new file'));
         }
     }
 
     protected updateWorkspaceStateKey(): WorkspaceState {
+        return this.doUpdateState();
+    }
+
+    protected updateWorkbenchStateKey(): WorkbenchState {
+        return this.doUpdateState();
+    }
+
+    protected doUpdateState(): WorkspaceState | WorkbenchState {
         if (this.workspaceService.opened) {
-            return this.workspaceService.isMultiRootWorkspaceOpened ? 'folder' : 'workspace';
+            return this.workspaceService.isMultiRootWorkspaceOpened ? 'workspace' : 'folder';
         }
         return 'empty';
     }
@@ -498,8 +576,8 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         }
         // Prompt users for confirmation before overwriting.
         const confirmed = await new ConfirmDialog({
-            title: nls.localize('vscode/textFileSaveErrorHandler/overwrite', 'Overwrite'),
-            msg: nls.localize('vscode/simpleFileDialog/remoteFileDialog.validateExisting', 'Do you really want to overwrite "{0}"?', uri.toString())
+            title: nls.localizeByDefault('Overwrite'),
+            msg: nls.localizeByDefault('{0} already exists. Are you sure you want to overwrite it?', uri.toString())
         }).open();
         return !!confirmed;
     }
@@ -517,6 +595,28 @@ export class WorkspaceFrontendContribution implements CommandContribution, Keybi
         return this.workspaceService.workspace?.resource;
     }
 
+    onWillStop(): OnWillStopAction | undefined {
+        const { workspace } = this.workspaceService;
+        if (workspace && this.workspaceService.isUntitledWorkspace(workspace.resource)) {
+            return {
+                action: async () => {
+                    const shouldSaveFile = await new UntitledWorkspaceExitDialog({
+                        title: nls.localizeByDefault('Do you want to save your workspace configuration as a file?')
+                    }).open();
+                    if (shouldSaveFile === "Don't Save") {
+                        return true;
+                    } else if (shouldSaveFile === 'Save') {
+                        return this.saveWorkspaceAs();
+                    }
+                    return false; // If cancel, prevent exit.
+
+                },
+                reason: 'Untitled workspace.',
+                // Since deleting the workspace would hobble any future functionality, run this late.
+                priority: 100,
+            };
+        }
+    }
 }
 
 export namespace WorkspaceFrontendContribution {

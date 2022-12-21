@@ -1,24 +1,25 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject, named } from 'inversify';
 import { Event, Emitter, WaitUntilEvent } from './event';
 import { Disposable, DisposableCollection } from './disposable';
 import { ContributionProvider } from './contribution-provider';
 import { nls } from './nls';
+import debounce = require('p-debounce');
 
 /**
  * A command is a unique identifier of a function
@@ -60,6 +61,16 @@ export namespace Command {
             label: command.label && nls.localize(nlsLabelKey, command.label),
             originalLabel: command.label,
             category: nlsCategoryKey && command.category && nls.localize(nlsCategoryKey, command.category) || command.category,
+            originalCategory: command.category,
+        };
+    }
+
+    export function toDefaultLocalizedCommand(command: Command): Command {
+        return {
+            ...command,
+            label: command.label && nls.localizeByDefault(command.label),
+            originalLabel: command.label,
+            category: command.category && nls.localizeByDefault(command.category),
             originalCategory: command.category,
         };
     }
@@ -188,6 +199,9 @@ export class CommandRegistry implements CommandService {
     protected readonly onDidExecuteCommandEmitter = new Emitter<CommandEvent>();
     readonly onDidExecuteCommand = this.onDidExecuteCommandEmitter.event;
 
+    protected readonly onCommandsChangedEmitter = new Emitter<void>();
+    readonly onCommandsChanged = this.onCommandsChangedEmitter.event;
+
     constructor(
         @inject(ContributionProvider) @named(CommandContribution)
         protected readonly contributionProvider: ContributionProvider<CommandContribution>
@@ -197,6 +211,12 @@ export class CommandRegistry implements CommandService {
         const contributions = this.contributionProvider.getContributions();
         for (const contrib of contributions) {
             contrib.registerCommands(this);
+        }
+    }
+
+    *getAllCommands(): IterableIterator<Readonly<Command & { handlers: CommandHandler[] }>> {
+        for (const command of Object.values(this._commands)) {
+            yield { ...command, handlers: this._handlers[command.id] ?? [] };
         }
     }
 
@@ -261,14 +281,22 @@ export class CommandRegistry implements CommandService {
             this._handlers[commandId] = handlers = [];
         }
         handlers.unshift(handler);
+        this.fireDidChange();
         return {
             dispose: () => {
                 const idx = handlers.indexOf(handler);
                 if (idx >= 0) {
                     handlers.splice(idx, 1);
+                    this.fireDidChange();
                 }
             }
         };
+    }
+
+    protected fireDidChange = debounce(() => this.doFireDidChange(), 0);
+
+    protected doFireDidChange(): void {
+        this.onCommandsChangedEmitter.fire();
     }
 
     /**

@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -22,38 +22,33 @@
 // Some entities copied and modified from https://github.com/Microsoft/vscode-debugadapter-node/blob/master/adapter/src/protocol.ts
 
 import {
-    CommunicationProvider,
+    DebugAdapter,
     DebugAdapterSession
 } from './debug-model';
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { IWebSocket } from '@theia/core/shared/vscode-ws-jsonrpc';
-import { DisposableCollection, Disposable } from '@theia/core/lib/common/disposable';
+import { Channel } from '../common/debug-service';
 
 /**
  * [DebugAdapterSession](#DebugAdapterSession) implementation.
  */
 export class DebugAdapterSessionImpl implements DebugAdapterSession {
 
-    private readonly toDispose = new DisposableCollection();
-    private channel: IWebSocket | undefined;
+    private channel: Channel | undefined;
+    private isClosed: boolean = false;
 
     constructor(
         readonly id: string,
-        protected readonly communicationProvider: CommunicationProvider
+        protected readonly debugAdapter: DebugAdapter
     ) {
-        this.toDispose.pushAll([
-            this.communicationProvider,
-            Disposable.create(() => this.write(JSON.stringify({ seq: -1, type: 'request', command: 'disconnect' }))),
-            Disposable.create(() => this.write(JSON.stringify({ seq: -1, type: 'request', command: 'terminate' })))
-        ]);
-
-        this.communicationProvider.onMessageReceived((message: string) => this.send(message));
-        this.communicationProvider.onClose(() => this.onDebugAdapterExit(1, undefined)); // FIXME pass a proper exit code
-        this.communicationProvider.onError(error => this.onDebugAdapterError(error));
+        this.debugAdapter.onMessageReceived((message: string) => this.send(message));
+        this.debugAdapter.onClose(() => this.onDebugAdapterExit());
+        this.debugAdapter.onError(error => this.onDebugAdapterError(error));
 
     }
 
-    async start(channel: IWebSocket): Promise<void> {
+    async start(channel: Channel): Promise<void> {
+
+        console.debug(`starting debug adapter session '${this.id}'`);
         if (this.channel) {
             throw new Error('The session has already been started, id: ' + this.id);
         }
@@ -63,19 +58,17 @@ export class DebugAdapterSessionImpl implements DebugAdapterSession {
 
     }
 
-    protected onDebugAdapterExit(exitCode: number, signal: string | undefined): void {
-        const event: DebugProtocol.ExitedEvent = {
-            type: 'event',
-            event: 'exited',
-            seq: -1,
-            body: {
-                exitCode
-            }
-        };
-        this.send(JSON.stringify(event));
+    protected onDebugAdapterExit(): void {
+        this.isClosed = true;
+        console.debug(`onDebugAdapterExit session: '${this.id}'`);
+        if (this.channel) {
+            this.channel.close();
+            this.channel = undefined;
+        }
     }
 
     protected onDebugAdapterError(error: Error): void {
+        console.debug(`error in debug adapter session: '${this.id}': ${JSON.stringify(error)}`);
         const event: DebugProtocol.Event = {
             type: 'event',
             event: 'error',
@@ -92,10 +85,18 @@ export class DebugAdapterSessionImpl implements DebugAdapterSession {
     }
 
     protected write(message: string): void {
-        this.communicationProvider.send(message);
+        if (!this.isClosed) {
+            this.debugAdapter.send(message);
+        }
     }
 
     async stop(): Promise<void> {
-        this.toDispose.dispose();
+        console.debug(`stopping debug adapter session: '${this.id}'`);
+
+        if (!this.isClosed) {
+            await this.debugAdapter.stop();
+        }
+        this.channel?.close();
+        this.channel = undefined;
     }
 }

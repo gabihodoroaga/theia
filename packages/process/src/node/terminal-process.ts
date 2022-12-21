@@ -1,25 +1,25 @@
-/********************************************************************************
- * Copyright (C) 2017 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject, named } from '@theia/core/shared/inversify';
 import { isWindows } from '@theia/core';
 import { ILogger } from '@theia/core/lib/common';
-import { Process, ProcessType, ProcessOptions, ProcessErrorEvent } from './process';
+import { Process, ProcessType, ProcessOptions, /* ProcessErrorEvent */ } from './process';
 import { ProcessManager } from './process-manager';
-import { IPty, spawn } from '@theia/node-pty';
+import { IPty, spawn } from 'node-pty';
 import { MultiRingBuffer, MultiRingBufferReadableStream } from './multi-ring-buffer';
 import { DevNullStream } from './dev-null-stream';
 import { signame } from './utils';
@@ -40,6 +40,11 @@ export interface TerminalProcessFactory {
     (options: TerminalProcessOptions): TerminalProcess;
 }
 
+export enum NodePtyErrors {
+    EACCES = 'Permission denied',
+    ENOENT = 'No such file or directory'
+}
+
 /**
  * Run arbitrary processes inside pseudo-terminals (PTY).
  *
@@ -55,7 +60,7 @@ export class TerminalProcess extends Process {
     readonly inputStream: Writable;
 
     constructor( // eslint-disable-next-line @typescript-eslint/indent
-        @inject(TerminalProcessOptions) protected readonly options: TerminalProcessOptions,
+        @inject(TerminalProcessOptions) protected override readonly options: TerminalProcessOptions,
         @inject(ProcessManager) processManager: ProcessManager,
         @inject(MultiRingBuffer) protected readonly ringBuffer: MultiRingBuffer,
         @inject(ILogger) @named('process') logger: ILogger
@@ -78,17 +83,10 @@ export class TerminalProcess extends Process {
             this.terminal = spawn(
                 options.command,
                 (isWindows && options.commandLine) || options.args || [],
-                options.options || {});
+                options.options || {}
+            );
 
-            this.terminal.on('exec', (reason: string | undefined) => {
-                if (reason === undefined) {
-                    this.emitOnStarted();
-                } else {
-                    const error = new Error(reason) as ProcessErrorEvent;
-                    error.code = reason;
-                    this.emitOnError(error);
-                }
-            });
+            process.nextTick(() => this.emitOnStarted());
 
             // node-pty actually wait for the underlying streams to be closed before emitting exit.
             // We should emulate the `exit` and `close` sequence.
@@ -133,9 +131,13 @@ export class TerminalProcess extends Process {
             // situation.
             const message: string = error.message;
 
-            if (message.startsWith('File not found: ')) {
+            if (message.startsWith('File not found: ') || message.endsWith(NodePtyErrors.ENOENT)) {
                 error.errno = 'ENOENT';
                 error.code = 'ENOENT';
+                error.path = options.command;
+            } else if (message.endsWith(NodePtyErrors.EACCES)) {
+                error.errno = 'EACCES';
+                error.code = 'EACCES';
                 error.path = options.command;
             }
 

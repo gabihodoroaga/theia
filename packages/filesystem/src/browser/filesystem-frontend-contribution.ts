@@ -1,30 +1,30 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject } from '@theia/core/shared/inversify';
 import URI from '@theia/core/lib/common/uri';
 import { environment } from '@theia/core/shared/@theia/application-package/lib/environment';
-import { MaybePromise, SelectionService, isCancelled } from '@theia/core/lib/common';
+import { MaybePromise, SelectionService, isCancelled, Emitter } from '@theia/core/lib/common';
 import { Command, CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import {
     FrontendApplicationContribution, ApplicationShell,
     NavigatableWidget, NavigatableWidgetOptions,
-    Saveable, WidgetManager, StatefulWidget, FrontendApplication, ExpandableTreeNode, waitForClosed,
+    Saveable, WidgetManager, StatefulWidget, FrontendApplication, ExpandableTreeNode,
     CorePreferences,
-    CommonCommands
+    CommonCommands,
 } from '@theia/core/lib/browser';
 import { MimeService } from '@theia/core/lib/browser/mime-service';
 import { TreeWidgetSelection } from '@theia/core/lib/browser/tree/tree-widget-selection';
@@ -76,6 +76,9 @@ export class FileSystemFrontendContribution implements FrontendApplicationContri
 
     @inject(FileService)
     protected readonly fileService: FileService;
+
+    protected onDidChangeEditorFileEmitter = new Emitter<{ editor: NavigatableWidget, type: FileChangeType }>();
+    readonly onDidChangeEditorFile = this.onDidChangeEditorFileEmitter.event;
 
     protected readonly userOperations = new Map<number, Deferred<void>>();
     protected queueUserOperation(event: UserFileOperationEvent): void {
@@ -269,24 +272,20 @@ export class FileSystemFrontendContribution implements FrontendApplicationContri
         if (!event.gotDeleted() && !event.gotAdded()) {
             return;
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pending: Promise<any>[] = [];
-
         const dirty = new Set<string>();
         const toClose = new Map<string, NavigatableWidget[]>();
         for (const [uri, widget] of NavigatableWidget.get(this.shell.widgets)) {
-            this.updateWidget(uri, widget, event, { dirty, toClose });
+            this.updateWidget(uri, widget, event, { dirty, toClose: toClose });
         }
-        for (const [uriString, widgets] of toClose.entries()) {
-            if (!dirty.has(uriString) && this.corePreferences['workbench.editor.closeOnFileDelete']) {
-                for (const widget of widgets) {
-                    widget.close();
-                    pending.push(waitForClosed(widget));
+        if (this.corePreferences['workbench.editor.closeOnFileDelete']) {
+            const doClose = [];
+            for (const [uri, widgets] of toClose.entries()) {
+                if (!dirty.has(uri)) {
+                    doClose.push(...widgets);
                 }
             }
+            await this.shell.closeMany(doClose);
         }
-
-        await Promise.all(pending);
     }
     protected updateWidget(uri: URI, widget: NavigatableWidget, event: FileChangesEvent, { dirty, toClose }: {
         dirty: Set<string>;
@@ -301,6 +300,7 @@ export class FileSystemFrontendContribution implements FrontendApplicationContri
             }
             if (!deleted) {
                 widget.title.label += this.deletedSuffix;
+                this.onDidChangeEditorFileEmitter.fire({ editor: widget, type: FileChangeType.DELETED });
             }
             const widgets = toClose.get(uriString) || [];
             widgets.push(widget);
@@ -308,6 +308,7 @@ export class FileSystemFrontendContribution implements FrontendApplicationContri
         } else if (event.contains(uri, FileChangeType.ADDED)) {
             if (deleted) {
                 widget.title.label = widget.title.label.substr(0, label.length - this.deletedSuffix.length);
+                this.onDidChangeEditorFileEmitter.fire({ editor: widget, type: FileChangeType.ADDED });
             }
         }
     }

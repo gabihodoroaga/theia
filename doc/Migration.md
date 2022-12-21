@@ -7,25 +7,82 @@ Please see the latest version (`master`) for the most up-to-date information. Pl
 
 ## Guide
 
-### v1.19.0
+### General
 
-#### Runtime System Plugin Resolvement
+Due to a [colors.js](https://github.com/Marak/colors.js) issue, a [resolution](https://classic.yarnpkg.com/lang/en/docs/selective-version-resolutions/) may be necessary for your application in order to workaround the problem:
 
-Introduced in `v1.19.0` was the feature to better support extension-packs which both contribute functionality and reference plugins (by `id`).
-The feature works best when there is no runtime plugin resolvement for system (builtin) plugins as it should be done at build time instead.
-In order not to change behavior today, the feature is behind an application prop (acting as a flag). If you want to enable better support for
-extension-packs and extension-dependencies as builtins the property should be turned off. You can disable the resolvement in your application's 
-`package.json` like so:
-
+For example:
 
 ```json
-"theia": {
-  "backend": {
-    "config": {
-      "resolveSystemPlugins": false
-    }
-  }
+"resolutions": {
+    "**/colors": "<=1.4.0"
 }
+```
+
+### v1.24.0
+
+#### node-gyp 8.4.1
+
+The `electron-rebuild` dependency was upgraded which in turn upgraded `node-gyp` to `v8.4.1`.
+This version of `node-gyp` does not support **Python2** (which is EOL) so **Python3** is necessary during the build.
+
+#### From WebSocket to Socket.io
+
+This is a very important change to how Theia sends and receives messages with its backend.
+
+This new Socket.io protocol will try to establish a WebSocket connection whenever possible, but it may also
+setup HTTP polling. It may even try to connect through HTTP before attempting WebSocket.
+
+Make sure your network configurations support both WebSockets and/or HTTP polling.
+
+### v1.23.0
+
+#### TypeScript 4.5.5
+
+If you are using TypeScript <= 4.5.5 and you encounter issues when building your Theia application because your compiler fails to parse our type definitions,
+then you should upgrade to TypeScript >= 4.5.5.
+
+#### Socket.io
+
+If you are deploying multiple Theia nodes behind a load balancer, you will have to enable sticky-sessions,
+as it is now required by the new WebSocket implementation using Socket.io protocol.
+
+For more details, see the socket.io documentation about [using multiple nodes](https://socket.io/docs/v4/using-multiple-nodes/#enabling-sticky-session).
+
+### v1.22.0
+
+#### Electron Update
+
+Electron got updated from 9 to 15, this might involve some modifications in your code based on the new APIs.
+
+See Electron's [documentation](https://github.com/electron/electron/tree/15-x-y/docs).
+
+Most notably the `electron.remote` API got deprecated and replaced with a `@electron/remote` package.
+
+Theia makes use of that package and re-exports it as `@theia/core/electron-shared/@electron/remote`.
+
+See `@theia/core` re-exports [documentation](../packages/core/README.md#re-exports).
+
+Lastly, Electron must now be defined in your application's `package.json` under `devDependencies`.
+
+`theia build` will automatically add the entry and prompt you to re-install your dependencies when out of sync.
+
+### v1.21.0
+
+#### Frontend Source Maps
+
+The frontend's source map naming changed. If you had something like the following in your debug configurations:
+
+```json
+      "sourceMapPathOverrides": {
+        "webpack://@theia/example-electron/*": "${workspaceFolder}/examples/electron/*"
+      }
+```
+
+You can delete this whole block and replace it by the following:
+
+```json
+      "webRoot": "${workspaceFolder}/examples/electron"
 ```
 
 ### v1.17.0

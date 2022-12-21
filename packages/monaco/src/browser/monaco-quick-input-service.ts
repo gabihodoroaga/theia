@@ -1,23 +1,24 @@
-/********************************************************************************
- * Copyright (c) 2021 SAP SE or an SAP affiliate company and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2021 SAP SE or an SAP affiliate company and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
     InputBox, InputOptions, KeybindingRegistry, PickOptions,
-    QuickInputButton, QuickInputService, QuickPick, QuickPickItem, QuickPickItemButtonEvent, QuickPickItemHighlights, QuickPickOptions, QuickPickSeparator
+    QuickInputButton, QuickInputService, QuickPick, QuickPickItem,
+    QuickPickItemButtonEvent, QuickPickItemHighlights, QuickPickOptions, QuickPickSeparator
 } from '@theia/core/lib/browser';
 import { CancellationToken, Event } from '@theia/core/lib/common';
 import { injectable, inject } from '@theia/core/shared/inversify';
@@ -251,7 +252,15 @@ export class MonacoQuickInputService implements QuickInputService {
                 });
                 wrapped.onDidTriggerItemButton((evt: QuickPickItemButtonEvent<T>) => {
                     if (options.onDidTriggerItemButton) {
-                        options.onDidTriggerItemButton(evt);
+                        // https://github.com/theia-ide/vscode/blob/standalone/0.23.x/src/vs/base/parts/quickinput/browser/quickInput.ts#L1387
+                        options.onDidTriggerItemButton(
+                            {
+                                ...evt,
+                                removeItem: () => {
+                                    wrapped.items = wrapped.items.filter(item => item !== evt.item);
+                                    wrapped.activeItems = wrapped.activeItems.filter(item => item !== evt.item);
+                                }
+                            });
                     }
                 });
                 wrapped.onDidChangeSelection((selectedItems: Array<T>) => {
@@ -370,7 +379,7 @@ class MonacoQuickInput {
 }
 
 class MonacoQuickPick<T extends QuickPickItem> extends MonacoQuickInput implements QuickPick<T> {
-    constructor(protected readonly wrapped: monaco.quickInput.IQuickPick<MonacoQuickPickItem<T>>, protected readonly keybindingRegistry: KeybindingRegistry) {
+    constructor(protected override readonly wrapped: monaco.quickInput.IQuickPick<MonacoQuickPickItem<T>>, protected readonly keybindingRegistry: KeybindingRegistry) {
         super(wrapped);
     }
 
@@ -485,4 +494,3 @@ export class MonacoQuickPickItem<T extends QuickPickItem> implements monaco.quic
         }
     }
 }
-

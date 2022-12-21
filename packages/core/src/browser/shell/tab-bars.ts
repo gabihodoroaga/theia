@@ -1,23 +1,23 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import PerfectScrollbar from 'perfect-scrollbar';
 import { TabBar, Title, Widget } from '@phosphor/widgets';
 import { VirtualElement, h, VirtualDOM, ElementInlineStyle } from '@phosphor/virtualdom';
-import { Disposable, DisposableCollection, MenuPath, notEmpty } from '../../common';
+import { Disposable, DisposableCollection, MenuPath, notEmpty, SelectionService, CommandService } from '../../common';
 import { ContextMenuRenderer } from '../context-menu-renderer';
 import { Signal, Slot } from '@phosphor/signaling';
 import { Message, MessageLoop } from '@phosphor/messaging';
@@ -31,14 +31,21 @@ import { IconThemeService } from '../icon-theme-service';
 import { BreadcrumbsRenderer, BreadcrumbsRendererFactory } from '../breadcrumbs/breadcrumbs-renderer';
 import { NavigatableWidget } from '../navigatable-types';
 import { IDragEvent } from '@phosphor/dragdrop';
+import { PINNED_CLASS } from '../widgets/widget';
 
 /** The class name added to hidden content nodes, which are required to render vertical side bars. */
 const HIDDEN_CONTENT_CLASS = 'theia-TabBar-hidden-content';
 
 /** Menu path for tab bars used throughout the application shell. */
 export const SHELL_TABBAR_CONTEXT_MENU: MenuPath = ['shell-tabbar-context-menu'];
+export const SHELL_TABBAR_CONTEXT_CLOSE: MenuPath = [...SHELL_TABBAR_CONTEXT_MENU, '0_close'];
+export const SHELL_TABBAR_CONTEXT_COPY: MenuPath = [...SHELL_TABBAR_CONTEXT_MENU, '1_copy'];
+// Kept here in anticipation of tab pinning behavior implemented in tab-bars.ts
+export const SHELL_TABBAR_CONTEXT_PIN: MenuPath = [...SHELL_TABBAR_CONTEXT_MENU, '4_pin'];
+export const SHELL_TABBAR_CONTEXT_SPLIT: MenuPath = [...SHELL_TABBAR_CONTEXT_MENU, '5_split'];
 
 export const TabBarRendererFactory = Symbol('TabBarRendererFactory');
+export type TabBarRendererFactory = () => TabBarRenderer;
 
 /**
  * Size information of DOM elements used for rendering tabs in side bars.
@@ -66,7 +73,6 @@ export interface SideBarRenderData extends TabBar.IRenderData<Widget> {
  * automatically.
  */
 export class TabBarRenderer extends TabBar.Renderer {
-
     /**
      * The menu path used to render the context menu.
      */
@@ -80,7 +86,9 @@ export class TabBarRenderer extends TabBar.Renderer {
     constructor(
         protected readonly contextMenuRenderer?: ContextMenuRenderer,
         protected readonly decoratorService?: TabBarDecoratorService,
-        protected readonly iconThemeService?: IconThemeService
+        protected readonly iconThemeService?: IconThemeService,
+        protected readonly selectionService?: SelectionService,
+        protected readonly commandService?: CommandService
     ) {
         super();
         if (this.decoratorService) {
@@ -133,7 +141,7 @@ export class TabBarRenderer extends TabBar.Renderer {
      * @param {boolean} isInSidePanel An optional check which determines if the tab is in the side-panel.
      * @returns {VirtualElement} The virtual element of the rendered tab.
      */
-    renderTab(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
+    override renderTab(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
         const title = data.title;
         const id = this.createTabId(data.title);
         const key = this.createTabKey(data);
@@ -156,7 +164,10 @@ export class TabBarRenderer extends TabBar.Renderer {
                 this.renderLabel(data, isInSidePanel),
                 this.renderBadge(data, isInSidePanel)
             ),
-            this.renderCloseIcon(data)
+            h.div({
+                className: 'p-TabBar-tabCloseIcon action-item',
+                onclick: this.handleCloseClickEvent
+            })
         );
     }
 
@@ -168,7 +179,7 @@ export class TabBarRenderer extends TabBar.Renderer {
      * If size information is available for the label and icon, set an explicit height on the tab.
      * The height value also considers padding, which should be derived from CSS settings.
      */
-    createTabStyle(data: SideBarRenderData): ElementInlineStyle {
+    override createTabStyle(data: SideBarRenderData): ElementInlineStyle {
         const zIndex = `${data.zIndex}`;
         const labelSize = data.labelSize;
         const iconSize = data.iconSize;
@@ -194,7 +205,7 @@ export class TabBarRenderer extends TabBar.Renderer {
      * @param {boolean} isInSidePanel An optional check which determines if the tab is in the side-panel.
      * @returns {VirtualElement} The virtual element of the rendered label.
      */
-    renderLabel(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
+    override renderLabel(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
         const labelSize = data.labelSize;
         const iconSize = data.iconSize;
         let width: string | undefined;
@@ -383,7 +394,7 @@ export class TabBarRenderer extends TabBar.Renderer {
      * @param {SideBarRenderData} data Data used to render the tab icon.
      * @param {boolean} isInSidePanel An optional check which determines if the tab is in the side-panel.
      */
-    renderIcon(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
+    override renderIcon(data: SideBarRenderData, isInSidePanel?: boolean): VirtualElement {
         if (!isInSidePanel && this.iconThemeService && this.iconThemeService.current === 'none') {
             return h.div();
         }
@@ -437,7 +448,37 @@ export class TabBarRenderer extends TabBar.Renderer {
         if (this.contextMenuRenderer && this.contextMenuPath && event.currentTarget instanceof HTMLElement) {
             event.stopPropagation();
             event.preventDefault();
-            this.contextMenuRenderer.render(this.contextMenuPath, event);
+            let widget: Widget | undefined = undefined;
+            if (this.tabBar) {
+                const titleIndex = Array.from(this.tabBar.contentNode.getElementsByClassName('p-TabBar-tab'))
+                    .findIndex(node => node.contains(event.currentTarget as HTMLElement));
+                if (titleIndex !== -1) {
+                    widget = this.tabBar.titles[titleIndex].owner;
+                }
+            }
+
+            const oldSelection = this.selectionService?.selection;
+            if (widget && this.selectionService) {
+                this.selectionService.selection = NavigatableWidget.is(widget) ? { uri: widget.getResourceUri() } : widget;
+            }
+
+            this.contextMenuRenderer.render({
+                menuPath: this.contextMenuPath!,
+                anchor: event,
+                args: [event],
+                // We'd like to wait until the command triggered by the context menu has been run, but this should let it get through the preamble, at least.
+                onHide: () => setTimeout(() => { if (this.selectionService) { this.selectionService.selection = oldSelection; } })
+            });
+        }
+    };
+
+    protected handleCloseClickEvent = (event: MouseEvent) => {
+        if (this.tabBar && event.currentTarget instanceof HTMLElement) {
+            const id = event.currentTarget.parentElement!.id;
+            const title = this.tabBar.titles.find(t => this.createTabId(t) === id);
+            if (title?.closable === false && title?.className.includes(PINNED_CLASS) && this.commandService) {
+                this.commandService.executeCommand('workbench.action.unpinEditor', event);
+            }
         }
     };
 
@@ -452,7 +493,6 @@ export class TabBarRenderer extends TabBar.Renderer {
             }
         }
     };
-
 }
 
 /**
@@ -472,7 +512,7 @@ export class ScrollableTabBar extends TabBar<Widget> {
         this.scrollBarFactory = () => new PerfectScrollbar(this.scrollbarHost, options);
     }
 
-    dispose(): void {
+    override dispose(): void {
         if (this.isDisposed) {
             return;
         }
@@ -480,14 +520,14 @@ export class ScrollableTabBar extends TabBar<Widget> {
         this.toDispose.dispose();
     }
 
-    protected onAfterAttach(msg: Message): void {
+    protected override onAfterAttach(msg: Message): void {
         if (!this.scrollBar) {
             this.scrollBar = this.scrollBarFactory();
         }
         super.onAfterAttach(msg);
     }
 
-    protected onBeforeDetach(msg: Message): void {
+    protected override onBeforeDetach(msg: Message): void {
         super.onBeforeDetach(msg);
         if (this.scrollBar) {
             this.scrollBar.destroy();
@@ -495,14 +535,14 @@ export class ScrollableTabBar extends TabBar<Widget> {
         }
     }
 
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         if (this.scrollBar) {
             this.scrollBar.update();
         }
     }
 
-    protected onResize(msg: Widget.ResizeMessage): void {
+    protected override onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
         if (this.scrollBar) {
             if (this.currentIndex >= 0) {
@@ -615,6 +655,7 @@ export class ToolbarAwareTabBar extends ScrollableTabBar {
     /**
      * Overrides the `contentNode` property getter in PhosphorJS' TabBar.
      */
+    // @ts-expect-error TS2611 `TabBar<T>.contentNode` is declared as `readonly contentNode` but is implemented as a getter.
     get contentNode(): HTMLUListElement {
         return this.tabBarContainer.getElementsByClassName(ToolbarAwareTabBar.Styles.TAB_BAR_CONTENT)[0] as HTMLUListElement;
     }
@@ -622,7 +663,7 @@ export class ToolbarAwareTabBar extends ScrollableTabBar {
     /**
      * Overrides the scrollable host from the parent class.
      */
-    protected get scrollbarHost(): HTMLElement {
+    protected override get scrollbarHost(): HTMLElement {
         return this.tabBarContainer;
     }
 
@@ -636,7 +677,7 @@ export class ToolbarAwareTabBar extends ScrollableTabBar {
         await this.breadcrumbsRenderer.refresh(uri);
     }
 
-    protected onAfterAttach(msg: Message): void {
+    protected override onAfterAttach(msg: Message): void {
         if (this.toolbar) {
             if (this.toolbar.isAttached) {
                 Widget.detach(this.toolbar);
@@ -650,14 +691,14 @@ export class ToolbarAwareTabBar extends ScrollableTabBar {
         super.onAfterAttach(msg);
     }
 
-    protected onBeforeDetach(msg: Message): void {
+    protected override onBeforeDetach(msg: Message): void {
         if (this.toolbar && this.toolbar.isAttached) {
             Widget.detach(this.toolbar);
         }
         super.onBeforeDetach(msg);
     }
 
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         this.updateToolbar();
     }
@@ -670,7 +711,7 @@ export class ToolbarAwareTabBar extends ScrollableTabBar {
         this.toolbar.updateTarget(widget);
     }
 
-    handleEvent(event: Event): void {
+    override handleEvent(event: Event): void {
         if (this.toolbar && event instanceof MouseEvent && this.toolbar.shouldHandleMouseEvent(event)) {
             // if the mouse event is over the toolbar part don't handle it.
             return;
@@ -763,13 +804,13 @@ export class SideTabBar extends ScrollableTabBar {
         return this.node.getElementsByClassName(HIDDEN_CONTENT_CLASS)[0] as HTMLUListElement;
     }
 
-    insertTab(index: number, value: Title<Widget> | Title.IOptions<Widget>): Title<Widget> {
+    override insertTab(index: number, value: Title<Widget> | Title.IOptions<Widget>): Title<Widget> {
         const result = super.insertTab(index, value);
         this.tabAdded.emit({ title: result });
         return result;
     }
 
-    protected onAfterAttach(msg: Message): void {
+    protected override onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
         this.renderTabBar();
         this.node.addEventListener('p-dragenter', this);
@@ -778,7 +819,7 @@ export class SideTabBar extends ScrollableTabBar {
         document.addEventListener('p-drop', this);
     }
 
-    protected onAfterDetach(msg: Message): void {
+    protected override onAfterDetach(msg: Message): void {
         super.onAfterDetach(msg);
         this.node.removeEventListener('p-dragenter', this);
         this.node.removeEventListener('p-dragover', this);
@@ -786,7 +827,7 @@ export class SideTabBar extends ScrollableTabBar {
         document.removeEventListener('p-drop', this);
     }
 
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         this.renderTabBar();
         if (this.scrollBar) {
             this.scrollBar.update();
@@ -867,7 +908,7 @@ export class SideTabBar extends ScrollableTabBar {
      * of the TabBar constructor cannot be used here because it is triggered when the
      * mouse goes down, and thus collides with dragging.
      */
-    handleEvent(event: Event): void {
+    override handleEvent(event: Event): void {
         switch (event.type) {
             case 'mousedown':
                 this.onMouseDown(event as MouseEvent);

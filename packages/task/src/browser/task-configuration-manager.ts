@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2019 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2019 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as jsoncparser from 'jsonc-parser';
 import debounce = require('p-debounce');
@@ -225,8 +225,9 @@ export class TaskConfigurationManager {
 
     protected readonly toDisposeOnDelegateChange = new DisposableCollection();
     protected updateWorkspaceModel(): void {
-        const newDelegate = this.workspaceService.saved ? this.workspacePreferences : this.folderPreferences;
-        const effectiveScope = this.workspaceService.saved ? TaskScope.Workspace : this.workspaceService.tryGetRoots()[0]?.resource.toString();
+        const isFolderWorkspace = this.workspaceService.opened && !this.workspaceService.saved;
+        const newDelegate = isFolderWorkspace ? this.folderPreferences : this.workspacePreferences;
+        const effectiveScope = isFolderWorkspace ? this.workspaceService.tryGetRoots()[0]?.resource.toString() : TaskScope.Workspace;
         if (newDelegate !== this.workspaceDelegate) {
             this.workspaceDelegate = newDelegate;
             this.toDisposeOnDelegateChange.dispose();

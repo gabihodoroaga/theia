@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { Widget } from '@theia/core/shared/@phosphor/widgets';
 import { injectable, inject, optional } from '@theia/core/shared/inversify';
@@ -35,23 +35,23 @@ import { nls } from '@theia/core/lib/common/nls';
 
 export namespace MiniBrowserCommands {
 
-    export const PREVIEW_CATEGORY_KEY = 'vscode/extensionEditor/preview';
     export const PREVIEW_CATEGORY = 'Preview';
+    export const PREVIEW_CATEGORY_KEY = nls.getDefaultKey(PREVIEW_CATEGORY);
 
     export const PREVIEW = Command.toLocalizedCommand({
         id: 'mini-browser.preview',
         label: 'Open Preview',
         iconClass: codicon('open-preview')
-    }, 'vscode/mainThreadFileSystemEventService/preview');
+    }, 'vscode.markdown-language-features/package/markdown.preview.title');
     export const OPEN_SOURCE: Command = {
         id: 'mini-browser.open.source',
         iconClass: codicon('go-to-file')
     };
-    export const OPEN_URL = Command.toLocalizedCommand({
+    export const OPEN_URL = Command.toDefaultLocalizedCommand({
         id: 'mini-browser.openUrl',
         category: PREVIEW_CATEGORY,
         label: 'Open URL'
-    }, 'vscode/url.contribution/openUrl', PREVIEW_CATEGORY_KEY);
+    });
 }
 
 /**
@@ -125,7 +125,7 @@ export class MiniBrowserOpenHandler extends NavigatableWidgetOpenHandler<MiniBro
         }
     }
 
-    async open(uri: URI, options?: MiniBrowserOpenerOptions): Promise<MiniBrowser> {
+    override async open(uri: URI, options?: MiniBrowserOpenerOptions): Promise<MiniBrowser> {
         const widget = await super.open(uri, options);
         const area = this.shell.getAreaFor(widget);
         if (area === 'right' || area === 'left') {
@@ -138,7 +138,7 @@ export class MiniBrowserOpenHandler extends NavigatableWidgetOpenHandler<MiniBro
         return widget;
     }
 
-    protected async getOrCreateWidget(uri: URI, options?: MiniBrowserOpenerOptions): Promise<MiniBrowser> {
+    protected override async getOrCreateWidget(uri: URI, options?: MiniBrowserOpenerOptions): Promise<MiniBrowser> {
         const props = await this.options(uri, options);
         const widget = await super.getOrCreateWidget(uri, props);
         widget.setProps(props);
@@ -220,12 +220,12 @@ export class MiniBrowserOpenHandler extends NavigatableWidgetOpenHandler<MiniBro
         toolbar.registerItem({
             id: MiniBrowserCommands.PREVIEW.id,
             command: MiniBrowserCommands.PREVIEW.id,
-            tooltip: nls.localize('theia/preview/openPreviewSide', 'Open Preview to the Side')
+            tooltip: nls.localize('vscode.markdown-language-features/package/markdown.previewSide.title', 'Open Preview to the Side')
         });
         toolbar.registerItem({
             id: MiniBrowserCommands.OPEN_SOURCE.id,
             command: MiniBrowserCommands.OPEN_SOURCE.id,
-            tooltip: nls.localize('theia/preview/openSource', 'Open Source')
+            tooltip: nls.localize('vscode.markdown-language-features/package/markdown.showSource.title', 'Open Source')
         });
     }
 
@@ -273,7 +273,7 @@ export class MiniBrowserOpenHandler extends NavigatableWidgetOpenHandler<MiniBro
 
     protected getSourceUri(ref?: Widget): URI | undefined {
         const uri = ref instanceof MiniBrowser && ref.getResourceUri() || undefined;
-        if (!uri || uri.scheme === 'http' || uri.scheme === 'https') {
+        if (!uri || uri.scheme === 'http' || uri.scheme === 'https' || uri.isEqual(MiniBrowserOpenHandler.PREVIEW_URI)) {
             return undefined;
         }
         return uri;
@@ -281,7 +281,7 @@ export class MiniBrowserOpenHandler extends NavigatableWidgetOpenHandler<MiniBro
 
     protected async openUrl(arg?: string): Promise<void> {
         const url = arg ? arg : await this.quickInputService?.input({
-            prompt: nls.localize('vscode/url.contribution/urlToOpen', 'URL to open'),
+            prompt: nls.localizeByDefault('URL to open'),
             placeHolder: nls.localize('theia/mini-browser/typeUrl', 'Type a URL')
         });
         if (url) {

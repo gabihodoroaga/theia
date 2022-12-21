@@ -1,22 +1,22 @@
-/********************************************************************************
- * Copyright (c) 2021 SAP SE or an SAP affiliate company and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2021 SAP SE or an SAP affiliate company and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject } from '@theia/core/shared/inversify';
 import URI from '@theia/core/lib/common/uri';
-import { ApplicationShell, OpenerOptions, OpenHandler, Widget, WidgetManager } from '@theia/core/lib/browser';
+import { ApplicationShell, OpenHandler, Widget, WidgetManager, WidgetOpenerOptions } from '@theia/core/lib/browser';
 import { CustomEditor, CustomEditorPriority, CustomEditorSelector } from '../../../common';
 import * as glob from './glob';
 import { CustomEditorWidget } from './custom-editor-widget';
@@ -28,7 +28,7 @@ export class CustomEditorOpener implements OpenHandler {
     readonly id: string;
     readonly label: string;
 
-    private readonly onDidOpenCustomEditorEmitter = new Emitter<CustomEditorWidget>();
+    private readonly onDidOpenCustomEditorEmitter = new Emitter<[CustomEditorWidget, WidgetOpenerOptions?]>();
     readonly onDidOpenCustomEditor = this.onDidOpenCustomEditorEmitter.event;
 
     constructor(
@@ -62,7 +62,7 @@ export class CustomEditorOpener implements OpenHandler {
     }
 
     protected readonly pendingWidgetPromises = new Map<string, Promise<CustomEditorWidget>>();
-    async open(uri: URI, options?: OpenerOptions): Promise<Widget | undefined> {
+    async open(uri: URI, options?: WidgetOpenerOptions): Promise<Widget | undefined> {
         let widget: CustomEditorWidget | undefined;
         const widgets = this.widgetManager.getWidgets(CustomEditorWidget.FACTORY_ID) as CustomEditorWidget[];
         widget = widgets.find(w => w.viewType === this.editor.viewType && w.resource.toString() === uri.toString());
@@ -84,7 +84,7 @@ export class CustomEditorOpener implements OpenHandler {
                 this.pendingWidgetPromises.delete(uriString);
                 widget.viewType = this.editor.viewType;
                 widget.resource = uri;
-                this.onDidOpenCustomEditorEmitter.fire(widget);
+                this.onDidOpenCustomEditorEmitter.fire([widget, options]);
             }
         }
         return widget;

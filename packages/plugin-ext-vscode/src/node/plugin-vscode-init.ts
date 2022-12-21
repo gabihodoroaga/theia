@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018-2019 Red Hat, Inc.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018-2019 Red Hat, Inc.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -47,13 +47,13 @@ export const doInitialization: BackendInitializationFn = (apiFactory: PluginAPIF
 function createVSCodeAPI(apiFactory: PluginAPIFactory, plugin: Plugin): typeof theia {
     const vscode = Object.assign(apiFactory(plugin), { ExtensionKind });
 
-    // use Theia plugin api instead vscode extensions
+    // use Theia plugin api to implement vscode extensions api
     (<any>vscode).extensions = {
         get all(): any[] {
-            return vscode.plugins.all.map(p => asExtension(p));
+            return vscode.plugins.all;
         },
         getExtension(pluginId: string): any | undefined {
-            return asExtension(vscode.plugins.getPlugin(pluginId));
+            return vscode.plugins.getPlugin(pluginId);
         },
         get onDidChange(): theia.Event<void> {
             return vscode.plugins.onDidChange;
@@ -95,20 +95,4 @@ function overrideInternalLoad(): void {
 
 function findPlugin(filePath: string): Plugin | undefined {
     return plugins.find(plugin => filePath.startsWith(plugin.pluginFolder));
-}
-
-function asExtension(plugin: any | undefined): any | undefined {
-    if (!plugin) {
-        return plugin;
-    }
-    if (plugin.pluginPath) {
-        plugin.extensionPath = plugin.pluginPath;
-    }
-
-    if (plugin.pluginUri) {
-        plugin.extensionUri = plugin.pluginUri;
-    }
-    // stub as a local VS Code extension (not running on a remote workspace)
-    plugin.extensionKind = ExtensionKind.UI;
-    return plugin;
 }

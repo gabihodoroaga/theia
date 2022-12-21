@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2019 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2019 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, optional } from 'inversify';
 import { isOSX } from '../../common/os';
@@ -23,8 +23,8 @@ import { nls } from '../../common/nls';
 
 export namespace KeyboardCommands {
 
-    const KEYBOARD_CATEGORY_KEY = 'vscode/settingsLayout/keyboard';
     const KEYBOARD_CATEGORY = 'Keyboard';
+    const KEYBOARD_CATEGORY_KEY = nls.getDefaultKey(KEYBOARD_CATEGORY);
 
     export const CHOOSE_KEYBOARD_LAYOUT = Command.toLocalizedCommand({
         id: 'core.keyboard.choose',
@@ -52,7 +52,7 @@ export class BrowserKeyboardFrontendContribution implements CommandContribution 
     protected async chooseLayout(): Promise<KeyboardLayoutData | undefined> {
         const current = this.layoutProvider.currentLayoutData;
         const autodetect: QuickPickValue<'autodetect'> = {
-            label: nls.localize('vscode/editorStatus/autoDetect', 'Auto-detect'),
+            label: nls.localizeByDefault('Auto Detect'),
             description: this.layoutProvider.currentLayoutSource !== 'user-choice' ? nls.localize('theia/core/keyboard/current', '(current: {0})', current.name) : undefined,
             detail: nls.localize('theia/core/keyboard/tryDetect', 'Try to detect the keyboard layout from browser information and pressed keys.'),
             value: 'autodetect'

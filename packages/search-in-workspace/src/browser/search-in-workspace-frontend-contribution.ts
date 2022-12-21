@@ -1,86 +1,105 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
-import { AbstractViewContribution, KeybindingRegistry, LabelProvider, CommonMenus, FrontendApplication, FrontendApplicationContribution } from '@theia/core/lib/browser';
+import {
+    AbstractViewContribution, KeybindingRegistry, LabelProvider, CommonMenus, FrontendApplication, FrontendApplicationContribution, CommonCommands
+} from '@theia/core/lib/browser';
 import { SearchInWorkspaceWidget } from './search-in-workspace-widget';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { CommandRegistry, MenuModelRegistry, SelectionService, Command } from '@theia/core';
 import { codicon, Widget } from '@theia/core/lib/browser/widgets';
-import { NavigatorContextMenu } from '@theia/navigator/lib/browser/navigator-contribution';
+import { FileNavigatorCommands, NavigatorContextMenu } from '@theia/navigator/lib/browser/navigator-contribution';
 import { UriCommandHandler, UriAwareCommandHandler } from '@theia/core/lib/common/uri-command-handler';
 import URI from '@theia/core/lib/common/uri';
 import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { SearchInWorkspaceContextKeyService } from './search-in-workspace-context-key-service';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
-import { Range } from '@theia/core/shared/vscode-languageserver-types';
+import { Range } from '@theia/core/shared/vscode-languageserver-protocol';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { SEARCH_VIEW_CONTAINER_ID } from './search-in-workspace-factory';
+import { SearchInWorkspaceResultTreeWidget } from './search-in-workspace-result-tree-widget';
+import { TreeWidgetSelection } from '@theia/core/lib/browser/tree/tree-widget-selection';
+import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 
 export namespace SearchInWorkspaceCommands {
-    const SEARCH_CATEGORY_KEY = 'vscode/search.contribution/search';
     const SEARCH_CATEGORY = 'Search';
     export const TOGGLE_SIW_WIDGET = {
         id: 'search-in-workspace.toggle'
     };
-    export const OPEN_SIW_WIDGET = Command.toLocalizedCommand({
+    export const OPEN_SIW_WIDGET = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.open',
         category: SEARCH_CATEGORY,
         label: 'Find in Files'
-    }, 'vscode/search.contribution/findInFiles', SEARCH_CATEGORY_KEY);
-    export const REPLACE_IN_FILES = Command.toLocalizedCommand({
+    });
+    export const REPLACE_IN_FILES = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.replace',
         category: SEARCH_CATEGORY,
         label: 'Replace in Files'
-    }, 'vscode/searchActions/replaceInFiles', SEARCH_CATEGORY_KEY);
-    export const FIND_IN_FOLDER = Command.toLocalizedCommand({
+    });
+    export const FIND_IN_FOLDER = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.in-folder',
         category: SEARCH_CATEGORY,
-        label: 'Find in Folder'
-    }, 'vscode/search.contribution/findInFolder', SEARCH_CATEGORY_KEY);
-    export const REFRESH_RESULTS = Command.toLocalizedCommand({
+        label: 'Find in Folder...'
+    });
+    export const REFRESH_RESULTS = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.refresh',
         category: SEARCH_CATEGORY,
         label: 'Refresh',
         iconClass: codicon('refresh')
-    }, 'vscode/search.contribution/RefreshAction.label', SEARCH_CATEGORY_KEY);
-    export const CANCEL_SEARCH = Command.toLocalizedCommand({
+    });
+    export const CANCEL_SEARCH = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.cancel',
         category: SEARCH_CATEGORY,
         label: 'Cancel Search',
         iconClass: codicon('search-stop')
-    }, 'vscode/search.contribution/CancelSearchAction.label', SEARCH_CATEGORY_KEY);
-    export const COLLAPSE_ALL = Command.toLocalizedCommand({
+    });
+    export const COLLAPSE_ALL = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.collapse-all',
         category: SEARCH_CATEGORY,
         label: 'Collapse All',
         iconClass: codicon('collapse-all')
-    }, 'vscode/search.contribution/CollapseDeepestExpandedLevelAction.label', SEARCH_CATEGORY_KEY);
-    export const EXPAND_ALL = Command.toLocalizedCommand({
+    });
+    export const EXPAND_ALL = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.expand-all',
         category: SEARCH_CATEGORY,
         label: 'Expand All',
         iconClass: codicon('expand-all')
-    }, 'vscode/search.contribution/ExpandAllAction.label', SEARCH_CATEGORY_KEY);
-    export const CLEAR_ALL = Command.toLocalizedCommand({
+    });
+    export const CLEAR_ALL = Command.toDefaultLocalizedCommand({
         id: 'search-in-workspace.clear-all',
         category: SEARCH_CATEGORY,
         label: 'Clear Search Results',
         iconClass: codicon('clear-all')
-    }, 'vscode/search.contribution/ClearSearchResultsAction.label', SEARCH_CATEGORY_KEY);
+    });
+    export const COPY_ALL = Command.toDefaultLocalizedCommand({
+        id: 'search.action.copyAll',
+        category: SEARCH_CATEGORY,
+        label: 'Copy All',
+    });
+    export const COPY_ONE = Command.toDefaultLocalizedCommand({
+        id: 'search.action.copyMatch',
+        category: SEARCH_CATEGORY,
+        label: 'Copy',
+    });
+    export const DISMISS_RESULT = Command.toDefaultLocalizedCommand({
+        id: 'search.action.remove',
+        category: SEARCH_CATEGORY,
+        label: 'Dismiss',
+    });
 }
 
 @injectable()
@@ -91,6 +110,7 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
     @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService;
     @inject(FileService) protected readonly fileService: FileService;
     @inject(EditorManager) protected readonly editorManager: EditorManager;
+    @inject(ClipboardService) protected readonly clipboardService: ClipboardService;
 
     @inject(SearchInWorkspaceContextKeyService)
     protected readonly contextKeyService: SearchInWorkspaceContextKeyService;
@@ -113,14 +133,14 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
         const updateFocusContextKey = () =>
             this.contextKeyService.searchViewletFocus.set(this.shell.activeWidget instanceof SearchInWorkspaceWidget);
         updateFocusContextKey();
-        this.shell.activeChanged.connect(updateFocusContextKey);
+        this.shell.onDidChangeActiveWidget(updateFocusContextKey);
     }
 
     async initializeLayout(app: FrontendApplication): Promise<void> {
         await this.openView({ activate: false });
     }
 
-    async registerCommands(commands: CommandRegistry): Promise<void> {
+    override async registerCommands(commands: CommandRegistry): Promise<void> {
         super.registerCommands(commands);
         commands.registerCommand(SearchInWorkspaceCommands.OPEN_SIW_WIDGET, {
             isEnabled: () => this.workspaceService.tryGetRoots().length > 0,
@@ -181,6 +201,60 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
             isEnabled: w => this.withWidget(w, widget => widget.hasResultList()),
             isVisible: w => this.withWidget(w, () => true)
         });
+        commands.registerCommand(SearchInWorkspaceCommands.DISMISS_RESULT, {
+            isEnabled: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            isVisible: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            execute: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                if (TreeWidgetSelection.is(selection)) {
+                    widget.resultTreeWidget.removeNode(selection[0]);
+                }
+            })
+        });
+        commands.registerCommand(SearchInWorkspaceCommands.COPY_ONE, {
+            isEnabled: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            isVisible: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            execute: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                if (TreeWidgetSelection.is(selection)) {
+                    const string = widget.resultTreeWidget.nodeToString(selection[0], true);
+                    if (string.length !== 0) {
+                        this.clipboardService.writeText(string);
+                    }
+                }
+            })
+        });
+        commands.registerCommand(SearchInWorkspaceCommands.COPY_ALL, {
+            isEnabled: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            isVisible: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                return TreeWidgetSelection.isSource(selection, widget.resultTreeWidget) && selection.length > 0;
+            }),
+            execute: () => this.withWidget(undefined, widget => {
+                const { selection } = this.selectionService;
+                if (TreeWidgetSelection.is(selection)) {
+                    const string = widget.resultTreeWidget.treeToString();
+                    if (string.length !== 0) {
+                        this.clipboardService.writeText(string);
+                    }
+                }
+            })
+        });
     }
 
     protected withWidget<T>(widget: Widget | undefined = this.tryGetWidget(), fn: (widget: SearchInWorkspaceWidget) => T): T | false {
@@ -213,7 +287,7 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
             : '';
     }
 
-    registerKeybindings(keybindings: KeybindingRegistry): void {
+    override registerKeybindings(keybindings: KeybindingRegistry): void {
         super.registerKeybindings(keybindings);
         keybindings.registerKeybinding({
             command: SearchInWorkspaceCommands.OPEN_SIW_WIDGET.id,
@@ -221,7 +295,7 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
         });
     }
 
-    registerMenus(menus: MenuModelRegistry): void {
+    override registerMenus(menus: MenuModelRegistry): void {
         super.registerMenus(menus);
         menus.registerMenuAction(NavigatorContextMenu.SEARCH, {
             commandId: SearchInWorkspaceCommands.FIND_IN_FOLDER.id
@@ -233,6 +307,26 @@ export class SearchInWorkspaceFrontendContribution extends AbstractViewContribut
         menus.registerMenuAction(CommonMenus.EDIT_FIND, {
             commandId: SearchInWorkspaceCommands.REPLACE_IN_FILES.id,
             order: '3'
+        });
+        menus.registerMenuAction(SearchInWorkspaceResultTreeWidget.Menus.INTERNAL, {
+            commandId: SearchInWorkspaceCommands.DISMISS_RESULT.id,
+            order: '1'
+        });
+        menus.registerMenuAction(SearchInWorkspaceResultTreeWidget.Menus.COPY, {
+            commandId: SearchInWorkspaceCommands.COPY_ONE.id,
+            order: '1',
+        });
+        menus.registerMenuAction(SearchInWorkspaceResultTreeWidget.Menus.COPY, {
+            commandId: CommonCommands.COPY_PATH.id,
+            order: '2',
+        });
+        menus.registerMenuAction(SearchInWorkspaceResultTreeWidget.Menus.COPY, {
+            commandId: SearchInWorkspaceCommands.COPY_ALL.id,
+            order: '3',
+        });
+        menus.registerMenuAction(SearchInWorkspaceResultTreeWidget.Menus.EXTERNAL, {
+            commandId: FileNavigatorCommands.REVEAL_IN_NAVIGATOR.id,
+            order: '1',
         });
     }
 

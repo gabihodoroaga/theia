@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2020 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { TabBar, Widget, Title } from '@theia/core/shared/@phosphor/widgets';
@@ -25,11 +25,11 @@ import { Preference, PreferenceMenus } from '../util/preference-types';
 import { CommandRegistry, DisposableCollection, Emitter, MenuModelRegistry } from '@theia/core/lib/common';
 import { nls } from '@theia/core/lib/common/nls';
 
-const USER_TAB_LABEL = nls.localize('vscode/preferencesWidgets/userSettings', 'User');
+const USER_TAB_LABEL = nls.localizeByDefault('User');
 const USER_TAB_INDEX = PreferenceScope['User'];
-const WORKSPACE_TAB_LABEL = nls.localize('vscode/preferencesWidgets/workspaceSettings', 'Workspace');
+const WORKSPACE_TAB_LABEL = nls.localizeByDefault('Workspace');
 const WORKSPACE_TAB_INDEX = PreferenceScope['Workspace'];
-const FOLDER_TAB_LABEL = nls.localize('vscode/preferencesWidgets/folderSettings', 'Folder');
+const FOLDER_TAB_LABEL = nls.localizeByDefault('Folder');
 const FOLDER_TAB_INDEX = PreferenceScope['Folder'];
 
 const PREFERENCE_TAB_CLASSNAME = 'preferences-scope-tab';
@@ -133,7 +133,7 @@ export class PreferencesScopeTabBar extends TabBar<Widget> implements StatefulWi
         this.addOrUpdateFolderTab();
     }
 
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         this.addTabIndexToTabs();
     }
@@ -236,7 +236,7 @@ export class PreferencesScopeTabBar extends TabBar<Widget> implements StatefulWi
         this.preferencesMenuFactory.createFolderWorkspacesMenu(workspaceRoots, this.currentSelection.uri);
     }
 
-    handleEvent(): void {
+    override handleEvent(): void {
         // Don't - the handlers are defined in PreferenceScopeTabbarWidget.addTabIndexToTabs()
     }
 
@@ -337,7 +337,7 @@ export class PreferencesScopeTabBar extends TabBar<Widget> implements StatefulWi
         this.toggleClass(SHADOW_CLASSNAME, showShadow);
     }
 
-    dispose(): void {
+    override dispose(): void {
         super.dispose();
         this.toDispose.dispose();
     }

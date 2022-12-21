@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import '../../src/browser/style/index.css';
 import '../../src/browser/open-editors-widget/open-editors.css';
@@ -41,6 +41,8 @@ import { bindContributionProvider } from '@theia/core/lib/common';
 import { OpenEditorsTreeDecorator } from './open-editors-widget/navigator-open-editors-decorator-service';
 import { OpenEditorsWidget } from './open-editors-widget/navigator-open-editors-widget';
 import { NavigatorTreeDecorator } from './navigator-decorator-service';
+import { NavigatorDeletedEditorDecorator } from './open-editors-widget/navigator-deleted-editor-decorator';
+import { NavigatorSymlinkDecorator } from './navigator-symlink-decorator';
 
 export default new ContainerModule(bind => {
     bindFileNavigatorPreferences(bind);
@@ -63,6 +65,8 @@ export default new ContainerModule(bind => {
     })).inSingletonScope();
     bindContributionProvider(bind, NavigatorTreeDecorator);
     bindContributionProvider(bind, OpenEditorsTreeDecorator);
+    bind(NavigatorDeletedEditorDecorator).toSelf().inSingletonScope();
+    bind(OpenEditorsTreeDecorator).toService(NavigatorDeletedEditorDecorator);
 
     bind(WidgetFactory).toDynamicValue(({ container }) => ({
         id: OpenEditorsWidget.ID,
@@ -78,4 +82,8 @@ export default new ContainerModule(bind => {
     bind(NavigatorTabBarDecorator).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(NavigatorTabBarDecorator);
     bind(TabBarDecorator).toService(NavigatorTabBarDecorator);
+
+    bind(NavigatorSymlinkDecorator).toSelf().inSingletonScope();
+    bind(NavigatorTreeDecorator).toService(NavigatorSymlinkDecorator);
+    bind(OpenEditorsTreeDecorator).toService(NavigatorSymlinkDecorator);
 });

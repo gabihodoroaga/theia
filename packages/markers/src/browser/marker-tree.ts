@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable } from '@theia/core/shared/inversify';
 import { TreeImpl, CompositeTreeNode, TreeNode, SelectableTreeNode, ExpandableTreeNode } from '@theia/core/lib/browser';
@@ -21,7 +21,7 @@ import { Marker } from '../common/marker';
 import { UriSelection } from '@theia/core/lib/common/selection';
 import URI from '@theia/core/lib/common/uri';
 import { ProblemSelection } from './problem/problem-selection';
-import { DiagnosticSeverity } from '@theia/core/shared/vscode-languageserver-types';
+import { DiagnosticSeverity } from '@theia/core/shared/vscode-languageserver-protocol';
 
 export const MarkerOptions = Symbol('MarkerOptions');
 export interface MarkerOptions {
@@ -72,7 +72,7 @@ export abstract class MarkerTree<T extends object> extends TreeImpl {
         this.setChildren(node, children);
     }
 
-    protected async resolveChildren(parent: CompositeTreeNode): Promise<TreeNode[]> {
+    protected override async resolveChildren(parent: CompositeTreeNode): Promise<TreeNode[]> {
         if (MarkerRootNode.is(parent)) {
             const nodes: MarkerInfoNode[] = [];
             for (const id of this.markerManager.getUris()) {

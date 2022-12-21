@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import '../../src/browser/style/terminal.css';
 import 'xterm/css/xterm.css';
@@ -20,7 +20,7 @@ import 'xterm/css/xterm.css';
 import { ContainerModule, Container } from '@theia/core/shared/inversify';
 import { CommandContribution, MenuContribution } from '@theia/core/lib/common';
 import { bindContributionProvider } from '@theia/core';
-import { KeybindingContribution, WebSocketConnectionProvider, WidgetFactory, KeybindingContext } from '@theia/core/lib/browser';
+import { KeybindingContribution, WebSocketConnectionProvider, WidgetFactory, KeybindingContext, FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { TerminalFrontendContribution } from './terminal-frontend-contribution';
 import { TerminalWidgetImpl, TERMINAL_WIDGET_FACTORY_ID } from './terminal-widget-impl';
@@ -32,10 +32,10 @@ import { TerminalActiveContext, TerminalSearchVisibleContext } from './terminal-
 import { createCommonBindings } from '../common/terminal-common-module';
 import { TerminalService } from './base/terminal-service';
 import { bindTerminalPreferences } from './terminal-preferences';
-import { URLMatcher, LocalhostMatcher } from './terminal-linkmatcher';
+//import { URLMatcher, LocalhostMatcher } from './terminal-linkmatcher';
 import { TerminalContribution } from './terminal-contribution';
-import { TerminalLinkmatcherFiles } from './terminal-linkmatcher-files';
-import { TerminalLinkmatcherDiffPre, TerminalLinkmatcherDiffPost } from './terminal-linkmatcher-diff';
+//import { TerminalLinkmatcherFiles } from './terminal-linkmatcher-files';
+//import { TerminalLinkmatcherDiffPre, TerminalLinkmatcherDiffPost } from './terminal-linkmatcher-diff';
 import { TerminalSearchWidgetFactory } from './search/terminal-search-widget';
 import { TerminalQuickOpenService, TerminalQuickOpenContribution } from './terminal-quick-open-service';
 import { createTerminalSearchFactory } from './search/terminal-search-container';
@@ -106,8 +106,9 @@ export default new ContainerModule(bind => {
     createCommonBindings(bind);
 
     // link matchers
-    bindContributionProvider(bind, TerminalContribution);
 
+    bindContributionProvider(bind, TerminalContribution);
+    /*
     bind(URLMatcher).toSelf().inSingletonScope();
     bind(TerminalContribution).toService(URLMatcher);
 
@@ -122,4 +123,6 @@ export default new ContainerModule(bind => {
 
     bind(TerminalLinkmatcherDiffPost).toSelf().inSingletonScope();
     bind(TerminalContribution).toService(TerminalLinkmatcherDiffPost);
+    */
+    bind(FrontendApplicationContribution).to(TerminalFrontendContribution);
 });

@@ -36,14 +36,27 @@
     min-height: var(--theia-content-line-height);
 }
 
-.theia-view-container > .p-SplitPanel > .p-SplitPanel-handle:after {
-    background-color: var(--theia-sideBarSectionHeader-border);
+.theia-view-container > .p-SplitPanel > .p-SplitPanel-handle::after {
     min-height: 2px;
-    min-width: 2px
+    min-width: 2px;
 }
 
-.theia-view-container > .p-SplitPanel > .p-SplitPanel-handle {
-    background-color: var(--theia-sideBarSectionHeader-border);
+.p-SplitPanel > .p-SplitPanel-handle:hover::after {
+    background-color: var(--theia-sash-hoverBorder);
+    transition-delay: var(--theia-sash-hoverDelay);
+}
+
+.p-SplitPanel > .p-SplitPanel-handle:active::after {
+    background-color: var(--theia-sash-activeBorder);
+    transition-delay: 0s !important;
+}
+
+.p-SplitPanel[data-orientation='horizontal'] > .p-SplitPanel-handle::after {
+    min-width: var(--theia-sash-width);
+}
+
+.p-SplitPanel[data-orientation='vertical'] > .p-SplitPanel-handle::after {
+    min-height: var(--theia-sash-width);
 }
 
 .theia-view-container .part {
@@ -59,6 +72,14 @@
     z-index: 10;
     color: var(--theia-sideBarSectionHeader-foreground);
     font-weight: 700;
+}
+
+.p-Widget > .theia-view-container-part-header {
+    border-top: 1px solid var(--theia-sideBarSectionHeader-border);
+}
+
+.p-Widget.p-first-visible > .theia-view-container-part-header {
+    border-top: none;
 }
 
 .theia-view-container-part-header .theia-ExpansionToggle {

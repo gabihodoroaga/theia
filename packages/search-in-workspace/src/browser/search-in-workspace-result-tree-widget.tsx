@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import {
@@ -30,12 +30,13 @@ import {
     ApplicationShell,
     DiffUris,
     TREE_NODE_INFO_CLASS,
-    codicon
+    codicon,
+    TopDownTreeIterator
 } from '@theia/core/lib/browser';
-import { CancellationTokenSource, Emitter, Event, ProgressService } from '@theia/core';
+import { CancellationTokenSource, Emitter, Event, isWindows, ProgressService } from '@theia/core';
 import {
     EditorManager, EditorDecoration, TrackedRangeStickiness, OverviewRulerLane,
-    EditorWidget, ReplaceOperation, EditorOpenerOptions, FindMatch
+    EditorWidget, EditorOpenerOptions, FindMatch
 } from '@theia/editor/lib/browser';
 import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { FileResourceResolver, FileSystemPreferences } from '@theia/filesystem/lib/browser';
@@ -70,6 +71,7 @@ export interface SearchInWorkspaceRootFolderNode extends ExpandableTreeNode, Sel
     parent: SearchInWorkspaceRoot;
     path: string;
     folderUri: string;
+    uri: URI;
 }
 export namespace SearchInWorkspaceRootFolderNode {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +87,7 @@ export interface SearchInWorkspaceFileNode extends ExpandableTreeNode, Selectabl
     parent: SearchInWorkspaceRootFolderNode;
     path: string;
     fileUri: string;
+    uri: URI;
 }
 export namespace SearchInWorkspaceFileNode {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,7 +125,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
     protected readonly toDisposeOnActiveEditorChanged = new DisposableCollection();
 
     // The default root name to add external search results in the case that a workspace is opened.
-    protected readonly defaultRootName = nls.localize('theia/searchResultsView/searchFolderMatch.other.label', 'Other files');
+    protected readonly defaultRootName = nls.localizeByDefault('Other files');
     protected forceVisibleRootNode = false;
 
     protected appliedDecorations = new Map<string, string[]>();
@@ -150,9 +153,9 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
     @inject(FileService) protected readonly fileService: FileService;
 
     constructor(
-        @inject(TreeProps) readonly props: TreeProps,
-        @inject(TreeModel) readonly model: TreeModel,
-        @inject(ContextMenuRenderer) protected readonly contextMenuRenderer: ContextMenuRenderer
+        @inject(TreeProps) props: TreeProps,
+        @inject(TreeModel) model: TreeModel,
+        @inject(ContextMenuRenderer) contextMenuRenderer: ContextMenuRenderer
     ) {
         super(props, model, contextMenuRenderer);
 
@@ -166,7 +169,12 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         this.toDispose.push(model.onSelectionChanged(nodes => {
             const node = nodes[0];
             if (SearchInWorkspaceResultLineNode.is(node)) {
-                this.doOpen(node, true);
+                this.doOpen(node, true, true);
+            }
+        }));
+        this.toDispose.push(model.onOpenNode(node => {
+            if (SearchInWorkspaceResultLineNode.is(node)) {
+                this.doOpen(node, true, false);
             }
         }));
 
@@ -175,7 +183,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
     }
 
     @postConstruct()
-    protected init(): void {
+    protected override init(): void {
         super.init();
         this.addClass('resultContainer');
 
@@ -609,7 +617,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         }
     }
 
-    protected handleUp(event: KeyboardEvent): void {
+    protected override handleUp(event: KeyboardEvent): void {
         if (!this.model.getPrevSelectableNode(this.model.selectedNodes[0])) {
             this.focusInputEmitter.fire(true);
         } else {
@@ -656,6 +664,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
             selected: false,
             path: uri.path.toString(),
             folderUri: rootUri,
+            uri: new URI(rootUri),
             children: [],
             expanded: true,
             id: rootUri,
@@ -672,7 +681,8 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
             expanded: true,
             id: `${rootUri}::${fileUri}`,
             parent,
-            fileUri
+            fileUri,
+            uri: new URI(fileUri),
         };
     }
 
@@ -707,12 +717,12 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         const uri: URI = new URI(uriStr);
         const relativePath = new URI(rootUriStr).relative(uri.parent);
         return {
-            name: uri.displayName,
+            name: this.labelProvider.getName(uri),
             path: relativePath ? relativePath.toString() : ''
         };
     }
 
-    protected renderCaption(node: TreeNode, props: NodeProps): React.ReactNode {
+    protected override renderCaption(node: TreeNode, props: NodeProps): React.ReactNode {
         if (SearchInWorkspaceRootFolderNode.is(node)) {
             return this.renderRootFolderNode(node);
         } else if (SearchInWorkspaceFileNode.is(node)) {
@@ -723,7 +733,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         return '';
     }
 
-    protected renderTailDecorations(node: TreeNode, props: NodeProps): React.ReactNode {
+    protected override renderTailDecorations(node: TreeNode, props: NodeProps): React.ReactNode {
         return <div className='result-node-buttons'>
             {this._showReplaceButtons && this.renderReplaceButton(node)}
             {this.renderRemoveButton(node)}
@@ -740,8 +750,8 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         return <span className={isResultLineNode ? 'replace-result' : 'replace-all-result'}
             onClick={e => this.doReplace(node, e)}
             title={isResultLineNode
-                ? nls.localize('vscode/findWidget/label.replaceButton', 'Replace')
-                : nls.localize('vscode/findWidget/label.replaceAllButton', 'Replace All')
+                ? nls.localizeByDefault('Replace')
+                : nls.localizeByDefault('Replace All')
             }></span>;
     }
 
@@ -786,7 +796,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
 
     protected confirmReplaceAll(resultNumber: number, fileNumber: number): Promise<boolean | undefined> {
         return new ConfirmDialog({
-            title: nls.localize('vscode/findWidget/label.replaceAllButton', 'Replace All'),
+            title: nls.localizeByDefault('Replace All'),
             msg: this.buildReplaceAllConfirmationMessage(resultNumber, fileNumber, this._replaceTerm)
         }).open();
     }
@@ -795,39 +805,39 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         if (occurrences === 1) {
             if (fileCount === 1) {
                 if (replaceValue) {
-                    return nls.localize('vscode/searchView/removeAll.occurrence.file.confirmation.message',
+                    return nls.localizeByDefault(
                         "Replace {0} occurrence across {1} file with '{2}'?", occurrences, fileCount, replaceValue);
                 }
 
-                return nls.localize('vscode/searchView/replaceAll.occurrence.file.confirmation.message',
+                return nls.localizeByDefault(
                     'Replace {0} occurrence across {1} file?', occurrences, fileCount);
             }
 
             if (replaceValue) {
-                return nls.localize('vscode/searchView/removeAll.occurrence.files.confirmation.message',
+                return nls.localizeByDefault(
                     "Replace {0} occurrence across {1} files with '{2}'?", occurrences, fileCount, replaceValue);
             }
 
-            return nls.localize('vscode/searchView/replaceAll.occurrence.files.confirmation.message',
+            return nls.localizeByDefault(
                 'Replace {0} occurrence across {1} files?', occurrences, fileCount);
         }
 
         if (fileCount === 1) {
             if (replaceValue) {
-                return nls.localize('vscode/searchView/removeAll.occurrences.file.confirmation.message',
+                return nls.localizeByDefault(
                     "Replace {0} occurrences across {1} file with '{2}'?", occurrences, fileCount, replaceValue);
             }
 
-            return nls.localize('vscode/searchView/replaceAll.occurrences.file.confirmation.message',
+            return nls.localizeByDefault(
                 'Replace {0} occurrences across {1} file?', occurrences, fileCount);
         }
 
         if (replaceValue) {
-            return nls.localize('vscode/searchView/removeAll.occurrences.files.confirmation.message',
+            return nls.localizeByDefault(
                 "Replace {0} occurrences across {1} files with '{2}'?", occurrences, fileCount, replaceValue);
         }
 
-        return nls.localize('vscode/searchView/replaceAll.occurrences.files.confirmation.message',
+        return nls.localizeByDefault(
             'Replace {0} occurrences across {1} files?', occurrences, fileCount);
     }
 
@@ -872,7 +882,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
                         character: resultLineNode.character - 1 + resultLineNode.length
                     }
                 }
-            } as ReplaceOperation));
+            }));
             // Replace the text.
             await widget.editor.replaceText({
                 source,
@@ -899,7 +909,7 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         return <span className={codicon('close')} onClick={e => this.remove(node, e)} title='Dismiss'></span>;
     }
 
-    protected removeNode(node: TreeNode): void {
+    removeNode(node: TreeNode): void {
         if (SearchInWorkspaceRootFolderNode.is(node)) {
             this.removeRootFolderNode(node);
         } else if (SearchInWorkspaceFileNode.is(node)) {
@@ -1039,10 +1049,10 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         return editorWidget;
     }
 
-    protected async doOpen(node: SearchInWorkspaceResultLineNode, preview: boolean = false): Promise<EditorWidget> {
+    protected async doOpen(node: SearchInWorkspaceResultLineNode, asDiffWidget = false, preview = false): Promise<EditorWidget> {
         let fileUri: URI;
         const resultNode = node.parent;
-        if (resultNode && this.isReplacing && preview) {
+        if (resultNode && this.isReplacing && asDiffWidget) {
             const leftUri = new URI(node.fileUri);
             const rightUri = await this.createReplacePreview(resultNode);
             fileUri = DiffUris.encode(leftUri, rightUri);
@@ -1061,7 +1071,8 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
                     character: node.character - 1 + node.length
                 }
             },
-            mode: 'reveal'
+            mode: preview ? 'reveal' : 'activate',
+            preview,
         };
 
         const editorWidget = await this.editorManager.open(fileUri, opts);
@@ -1164,4 +1175,52 @@ export class SearchInWorkspaceResultTreeWidget extends TreeWidget {
         return itemA.localeCompare(itemB);
     }
 
+    /**
+     * @param recursive if true, all child nodes will be included in the stringified result.
+     */
+    nodeToString(node: TreeNode, recursive: boolean): string {
+        if (SearchInWorkspaceFileNode.is(node) || SearchInWorkspaceRootFolderNode.is(node)) {
+            if (recursive) {
+                return this.nodeIteratorToString(new TopDownTreeIterator(node, { pruneSiblings: true }));
+            }
+            return this.labelProvider.getLongName(node.uri);
+        }
+        if (SearchInWorkspaceResultLineNode.is(node)) {
+            return `  ${node.line}:${node.character}: ${node.lineText}`;
+        }
+        return '';
+    }
+
+    treeToString(): string {
+        return this.nodeIteratorToString(this.getVisibleNodes());
+    }
+
+    protected *getVisibleNodes(): IterableIterator<TreeNode> {
+        for (const { node } of this.rows.values()) {
+            yield node;
+        }
+    }
+
+    protected nodeIteratorToString(nodes: Iterable<TreeNode>): string {
+        const strings = [];
+        for (const node of nodes) {
+            const string = this.nodeToString(node, false);
+            if (string.length !== 0) {
+                strings.push(string);
+            }
+        }
+        return strings.join(isWindows ? '\r\n' : '\n');
+    }
+}
+
+export namespace SearchInWorkspaceResultTreeWidget {
+    export namespace Menus {
+        export const BASE = ['siw-tree-context-menu'];
+        /** Dismiss command, or others that only affect the widget itself */
+        export const INTERNAL = [...BASE, '1_internal'];
+        /** Copy a stringified representation of content */
+        export const COPY = [...BASE, '2_copy'];
+        /** Commands that lead out of the widget, like revealing a file in the navigator */
+        export const EXTERNAL = [...BASE, '3_external'];
+    }
 }

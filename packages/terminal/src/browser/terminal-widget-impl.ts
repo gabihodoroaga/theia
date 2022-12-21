@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { Terminal, RendererType } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -49,7 +49,7 @@ export interface TerminalWidgetFactoryOptions extends Partial<TerminalWidgetOpti
 @injectable()
 export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget {
 
-    static LABEL = nls.localize('vscode/settingsLayout/terminal', 'Terminal');
+    static LABEL = nls.localizeByDefault('Terminal');
     protected terminalKind = 'user';
     protected _terminalId = -1;
     protected readonly onTermDidClose = new Emitter<TerminalWidget>();
@@ -62,7 +62,7 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
     protected hoverMessage: HTMLDivElement;
     protected lastTouchEnd: TouchEvent | undefined;
     protected isAttachedCloseListener: boolean = false;
-    lastCwd = new URI();
+    override lastCwd = new URI();
 
     @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService;
     @inject(WebSocketConnectionProvider) protected readonly webSocketConnectionProvider: WebSocketConnectionProvider;
@@ -70,7 +70,7 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
     @inject(ShellTerminalServerProxy) protected readonly shellTerminalServer: ShellTerminalServerProxy;
     @inject(TerminalWatcher) protected readonly terminalWatcher: TerminalWatcher;
     @inject(ILogger) @named('terminal') protected readonly logger: ILogger;
-    @inject('terminal-dom-id') public readonly id: string;
+    @inject('terminal-dom-id') override readonly id: string;
     @inject(TerminalPreferences) protected readonly preferences: TerminalPreferences;
     @inject(ContributionProvider) @named(TerminalContribution) protected readonly terminalContributionProvider: ContributionProvider<TerminalContribution>;
     @inject(TerminalService) protected readonly terminalService: TerminalService;
@@ -90,6 +90,9 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
 
     protected readonly onDataEmitter = new Emitter<string>();
     readonly onData: Event<string> = this.onDataEmitter.event;
+
+    protected readonly onKeyEmitter = new Emitter<{ key: string, domEvent: KeyboardEvent }>();
+    readonly onKey: Event<{ key: string, domEvent: KeyboardEvent }> = this.onKeyEmitter.event;
 
     protected readonly toDisposeOnConnect = new DisposableCollection();
 
@@ -166,8 +169,11 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
                 } else if (preferenceName === 'cursorStyle') {
                     preferenceValue = this.getCursorStyle();
                 }
-
-                this.term.setOption(preferenceName, preferenceValue);
+                try {
+                    this.term.setOption(preferenceName, preferenceValue);
+                } catch (e) {
+                    console.debug(`xterm configuration: '${preferenceName}' with value '${preferenceValue}' is not valid.`);
+                }
                 this.needsResize = true;
                 this.update();
             }
@@ -210,6 +216,7 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
         this.toDispose.push(this.onDidOpenFailureEmitter);
         this.toDispose.push(this.onSizeChangedEmitter);
         this.toDispose.push(this.onDataEmitter);
+        this.toDispose.push(this.onKeyEmitter);
 
         const touchEndListener = (event: TouchEvent) => {
             if (this.node.contains(event.target as Node)) {
@@ -239,6 +246,10 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
             this.onDataEmitter.fire(data);
         }));
 
+        this.toDispose.push(this.term.onKey(data => {
+            this.onKeyEmitter.fire(data);
+        }));
+
         for (const contribution of this.terminalContributionProvider.getContributions()) {
             contribution.onCreate(this);
         }
@@ -248,9 +259,8 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
     }
 
     static getFollowLinkHover(): string {
-        const cmdCtrl = isOSX ? 'Cmd' : 'Ctrl';
-        return nls.localize('vscode/terminalLinkManager/followLink', 'Follow link') + ' (' +
-            nls.localize(`vscode/terminalLinkManager/terminalLinkHandler.followLink${cmdCtrl}`, `${cmdCtrl} + Click`) + ')';
+        const cmdCtrl = isOSX ? 'cmd' : 'ctrl';
+        return `${nls.localizeByDefault('Follow link')} (${nls.localizeByDefault(`${cmdCtrl} + click`)})`;
     }
 
     get kind(): 'user' | string {
@@ -430,7 +440,7 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
         throw new Error('Error creating terminal widget, see the backend error log for more information.');
     }
 
-    processMessage(msg: Message): void {
+    override processMessage(msg: Message): void {
         super.processMessage(msg);
         switch (msg.type) {
             case 'fit-request':
@@ -440,35 +450,35 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
                 break;
         }
     }
-    protected onFitRequest(msg: Message): void {
+    protected override onFitRequest(msg: Message): void {
         super.onFitRequest(msg);
         MessageLoop.sendMessage(this, Widget.ResizeMessage.UnknownSize);
     }
-    protected onActivateRequest(msg: Message): void {
+    protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
         this.term.focus();
     }
-    protected onAfterShow(msg: Message): void {
+    protected override onAfterShow(msg: Message): void {
         super.onAfterShow(msg);
         this.update();
     }
-    protected onAfterAttach(msg: Message): void {
+    protected override onAfterAttach(msg: Message): void {
         Widget.attach(this.searchBox, this.node);
         super.onAfterAttach(msg);
         this.update();
     }
-    protected onBeforeDetach(msg: Message): void {
+    protected override onBeforeDetach(msg: Message): void {
         Widget.detach(this.searchBox);
         super.onBeforeDetach(msg);
     }
-    protected onResize(msg: Widget.ResizeMessage): void {
+    protected override onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
         this.needsResize = true;
         this.update();
     }
 
     protected needsResize = true;
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         if (!this.isVisible || !this.isAttached) {
             return;
@@ -614,7 +624,7 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
         return this.onTermDidClose.event;
     }
 
-    dispose(): void {
+    override dispose(): void {
         /* Close the backend terminal only when explicitly closing the terminal
          * a refresh for example won't close it.  */
         if (this.closeOnDispose === true && typeof this.terminalId === 'number') {

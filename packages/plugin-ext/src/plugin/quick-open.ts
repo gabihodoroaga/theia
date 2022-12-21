@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
     QuickOpenExt, PLUGIN_RPC_CONTEXT as Ext, QuickOpenMain, TransferInputBox, Plugin,
@@ -30,6 +30,7 @@ import * as path from 'path';
 import { convertToTransferQuickPickItems } from './type-converters';
 import { PluginPackage } from '../common/plugin-protocol';
 import { QuickInputButtonHandle } from '@theia/core/lib/browser';
+import { MaybePromise } from '@theia/core/lib/common/types';
 
 const canceledName = 'Canceled';
 /**
@@ -64,7 +65,7 @@ export function getDarkIconUri(iconPath: URI | { light: URI; dark: URI; }): URI 
 export class QuickOpenExtImpl implements QuickOpenExt {
     private proxy: QuickOpenMain;
     private onDidSelectItem: undefined | ((handle: number) => void);
-    private validateInputHandler: (input: string) => Promise<string | null | undefined> | undefined;
+    private validateInputHandler?: (input: string) => MaybePromise<string | null | undefined>;
     private _sessions = new Map<number, QuickInputExt>(); // Each quickinput will have a number so that we know where to fire events
     private _instances = 0;
 
@@ -143,17 +144,13 @@ export class QuickOpenExtImpl implements QuickOpenExt {
     // ---- input
 
     showInput(options?: InputBoxOptions, token: theia.CancellationToken = CancellationToken.None): PromiseLike<string | undefined> {
-        if (options?.validateInput) {
-            this.validateInputHandler = options.validateInput;
-        }
-
+        this.validateInputHandler = options?.validateInput;
         if (!options) { options = { placeHolder: '' }; }
         return this.proxy.$input(options, typeof this.validateInputHandler === 'function', token);
     }
 
     async showInputBox(options: TransferInputBox): Promise<string | undefined> {
-        this.validateInputHandler = options && options.validateInput;
-
+        this.validateInputHandler = typeof options.validateInput === 'function' ? options.validateInput : undefined;
         return this.proxy.$showInputBox(options, typeof this.validateInputHandler === 'function');
     }
 
@@ -495,11 +492,12 @@ export class InputBoxExt extends QuickInputExt implements InputBox {
     private _prompt: string | undefined;
     private _validationMessage: string | undefined;
 
-    constructor(readonly quickOpen: QuickOpenExtImpl,
-        readonly quickOpenMain: QuickOpenMain,
-        readonly plugin: Plugin,
-        onDispose: () => void) {
-
+    constructor(
+        override readonly quickOpen: QuickOpenExtImpl,
+        override readonly quickOpenMain: QuickOpenMain,
+        override readonly plugin: Plugin,
+        onDispose: () => void
+    ) {
         super(quickOpen, quickOpenMain, plugin, onDispose);
 
         this.buttons = [];
@@ -536,7 +534,7 @@ export class InputBoxExt extends QuickInputExt implements InputBox {
         }
     }
 
-    async show(): Promise<void> {
+    override async show(): Promise<void> {
         super.show();
 
         const update = (value: string) => {
@@ -587,11 +585,12 @@ export class QuickPickExt<T extends theia.QuickPickItem> extends QuickInputExt i
     private readonly _onDidChangeActiveEmitter = new Emitter<T[]>();
     private readonly _onDidChangeSelectionEmitter = new Emitter<T[]>();
 
-    constructor(readonly quickOpen: QuickOpenExtImpl,
-        readonly quickOpenMain: QuickOpenMain,
-        readonly plugin: Plugin,
-        onDispose: () => void) {
-
+    constructor(
+        override readonly quickOpen: QuickOpenExtImpl,
+        override readonly quickOpenMain: QuickOpenMain,
+        override readonly plugin: Plugin,
+        onDispose: () => void
+    ) {
         super(quickOpen, quickOpenMain, plugin, onDispose);
         this.buttons = [];
 

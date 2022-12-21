@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { Command, CommandContribution, CommandRegistry, environment, isOSX, CancellationTokenSource } from '@theia/core';
 import {
@@ -78,6 +78,7 @@ import {
 } from '@theia/plugin-ext/lib/main/browser/callhierarchy/callhierarchy-type-converters';
 import { CustomEditorOpener } from '@theia/plugin-ext/lib/main/browser/custom-editors/custom-editor-opener';
 import { nls } from '@theia/core/lib/common/nls';
+import { WindowService } from '@theia/core/lib/browser/window/window-service';
 
 export namespace VscodeCommands {
     export const OPEN: Command = {
@@ -137,6 +138,8 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
     protected readonly callHierarchyProvider: CallHierarchyServiceProvider;
     @inject(MonacoTextModelService)
     protected readonly textModelService: MonacoTextModelService;
+    @inject(WindowService)
+    protected readonly windowService: WindowService;
 
     private async openWith(commandId: string, resource: URI, columnOrOptions?: ViewColumn | TextDocumentShowOptions, openerId?: string): Promise<boolean> {
         if (!resource) {
@@ -160,23 +163,23 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         const uri = new TheiaURI(resource);
         const editorOptions = DocumentsMainImpl.toEditorOpenerOptions(this.shell, options);
 
-        let opener: OpenHandler | undefined;
+        let openHandler: OpenHandler | undefined;
         if (typeof openerId === 'string') {
             const lowerViewType = openerId.toLowerCase();
             const openers = await this.openerService.getOpeners();
-            for (const opnr of openers) {
-                const idLowerCase = opnr.id.toLowerCase();
+            for (const opener of openers) {
+                const idLowerCase = opener.id.toLowerCase();
                 if (lowerViewType === idLowerCase) {
-                    opener = opnr;
+                    openHandler = opener;
                     break;
                 }
             }
         } else {
-            opener = await this.openerService.getOpener(uri, editorOptions);
+            openHandler = await this.openerService.getOpener(uri, editorOptions);
         }
 
-        if (opener) {
-            await opener.open(uri, editorOptions);
+        if (openHandler) {
+            await openHandler.open(uri, editorOptions);
             return true;
         }
 
@@ -346,11 +349,8 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                         return (resourceUri && resourceUri.toString()) === uriString;
                     });
                 }
-                for (const widget of this.shell.widgets) {
-                    if (this.codeEditorWidgetUtil.is(widget) && widget !== editor) {
-                        await this.shell.closeWidget(widget.id);
-                    }
-                }
+                const toClose = this.shell.widgets.filter(widget => widget !== editor && this.codeEditorWidgetUtil.is(widget));
+                await this.shell.closeMany(toClose);
             }
         });
 
@@ -379,13 +379,13 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
 
         commands.registerCommand({
             id: 'workbench.action.closeEditorsInGroup',
-            label: nls.localize('vscode/editor.contribution/closeEditorsInGroup', 'Close All Editors in Group')
+            label: nls.localizeByDefault('Close All Editors in Group')
         }, {
             execute: (uri?: monaco.Uri) => performActionOnGroup(this.shell.closeTabs, uri)
         });
         commands.registerCommand({
             id: 'workbench.files.saveAllInGroup',
-            label: nls.localize('vscode/fileActions.contribution/saveAllInGroup', 'Save All in Group')
+            label: nls.localizeByDefault('Save All in Group')
         }, {
             execute: (uri?: monaco.Uri) => performActionOnGroup(this.shell.saveTabs, uri)
         });
@@ -446,13 +446,8 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         });
         commands.registerCommand({ id: 'workbench.action.closeAllEditors' }, {
             execute: async () => {
-                const promises = [];
-                for (const widget of this.shell.widgets) {
-                    if (this.codeEditorWidgetUtil.is(widget)) {
-                        promises.push(this.shell.closeWidget(widget.id));
-                    }
-                }
-                await Promise.all(promises);
+                const toClose = this.shell.widgets.filter(widget => this.codeEditorWidgetUtil.is(widget));
+                await this.shell.closeMany(toClose);
             }
         });
         commands.registerCommand({ id: 'workbench.action.nextEditor' }, {
@@ -477,7 +472,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
 
         commands.registerCommand({ id: 'workbench.action.reloadWindow' }, {
             execute: () => {
-                window.location.reload();
+                this.windowService.reload();
             }
         });
 

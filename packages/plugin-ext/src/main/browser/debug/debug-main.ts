@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -32,7 +32,6 @@ import { DebugSourceBreakpoint } from '@theia/debug/lib/browser/model/debug-sour
 import { URI as Uri } from '@theia/core/shared/vscode-uri';
 import { SourceBreakpoint, FunctionBreakpoint } from '@theia/debug/lib/browser/breakpoint/breakpoint-marker';
 import { DebugConfiguration, DebugSessionOptions } from '@theia/debug/lib/common/debug-configuration';
-import { ConnectionMainImpl } from '../connection-main';
 import { DebuggerDescription } from '@theia/debug/lib/common/debug-service';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { DebugConfigurationManager } from '@theia/debug/lib/browser/debug-configuration-manager';
@@ -44,7 +43,6 @@ import { PluginDebugAdapterContribution } from './plugin-debug-adapter-contribut
 import { PluginDebugSessionContributionRegistrator, PluginDebugSessionContributionRegistry } from './plugin-debug-session-contribution-registry';
 import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
 import { PluginDebugSessionFactory } from './plugin-debug-session-factory';
-import { PluginWebSocketChannel } from '../../../common/connection';
 import { PluginDebugAdapterContributionRegistrator, PluginDebugService } from './plugin-debug-service';
 import { HostedPluginSupport } from '../../../hosted/browser/hosted-plugin';
 import { DebugFunctionBreakpoint } from '@theia/debug/lib/browser/model/debug-function-breakpoint';
@@ -53,6 +51,7 @@ import { ConsoleSessionManager } from '@theia/console/lib/browser/console-sessio
 import { DebugConsoleSession } from '@theia/debug/lib/browser/console/debug-console-session';
 import { ContributionProvider } from '@theia/core/lib/common';
 import { DebugContribution } from '@theia/debug/lib/browser/debug-contribution';
+import { ConnectionImpl } from '../../../common/connection';
 
 export class DebugMainImpl implements DebugMain, Disposable {
     private readonly debugExt: DebugExt;
@@ -76,7 +75,7 @@ export class DebugMainImpl implements DebugMain, Disposable {
     private readonly debuggerContributions = new Map<string, DisposableCollection>();
     private readonly toDispose = new DisposableCollection();
 
-    constructor(rpc: RPCProtocol, readonly connectionMain: ConnectionMainImpl, container: interfaces.Container) {
+    constructor(rpc: RPCProtocol, readonly connectionMain: ConnectionImpl, container: interfaces.Container) {
         this.debugExt = rpc.getProxy(MAIN_RPC_CONTEXT.DEBUG_EXT);
         this.sessionManager = container.get(DebugSessionManager);
         this.labelProvider = container.get(LabelProvider);
@@ -149,7 +148,7 @@ export class DebugMainImpl implements DebugMain, Disposable {
             this.debugPreferences,
             async (sessionId: string) => {
                 const connection = await this.connectionMain.ensureConnection(sessionId);
-                return new PluginWebSocketChannel(connection);
+                return connection;
             },
             this.fileService,
             terminalOptionsExt,
@@ -275,14 +274,24 @@ export class DebugMainImpl implements DebugMain, Disposable {
             return false;
         }
 
-        Object.assign(configuration, options);
-
+        const debugConfiguration = { ...configuration, ...options };
         const session = await this.sessionManager.start({
-            configuration,
+            configuration: debugConfiguration,
             workspaceFolderUri: folder && Uri.revive(folder.uri).toString()
         });
 
         return !!session;
+    }
+
+    async $stopDebugging(sessionId?: string): Promise<void> {
+        if (sessionId) {
+            const session = this.sessionManager.getSession(sessionId);
+            return this.sessionManager.terminateSession(session);
+        }
+        // Terminate all sessions if no session is provided.
+        for (const session of this.sessionManager.sessions) {
+            this.sessionManager.terminateSession(session);
+        }
     }
 
     private toTheiaPluginApiBreakpoints(breakpoints: (SourceBreakpoint | FunctionBreakpoint)[]): Breakpoint[] {

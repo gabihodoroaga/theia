@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2021 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2021 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, interfaces, postConstruct } from '@theia/core/shared/inversify';
 import {
@@ -87,17 +87,17 @@ export async function getExternalTerminalSchema(externalTerminalService: Externa
         properties: {
             'terminal.external.windowsExec': {
                 type: 'string',
-                description: nls.localize('vscode/externalTerminal.contribution/terminal.external.windowsExec', 'Customizes which terminal to run on Windows.'),
+                description: nls.localizeByDefault('Customizes which terminal to run on Windows.'),
                 default: `${isWindows ? hostExec : 'C:\\WINDOWS\\System32\\cmd.exe'}`
             },
             'terminal.external.osxExec': {
                 type: 'string',
-                description: nls.localize('vscode/externalTerminal.contribution/terminal.external.osxExec', 'Customizes which terminal to run on macOS.'),
+                description: nls.localizeByDefault('Customizes which terminal application to run on macOS.'),
                 default: `${isOSX ? hostExec : 'Terminal.app'}`
             },
             'terminal.external.linuxExec': {
                 type: 'string',
-                description: nls.localize('vscode/externalTerminal.contribution/terminal.external.linuxExec', 'Customizes which terminal to run on Linux.'),
+                description: nls.localizeByDefault('Customizes which terminal to run on Linux.'),
                 default: `${!(isWindows || isOSX) ? hostExec : 'xterm'}`
             }
         }

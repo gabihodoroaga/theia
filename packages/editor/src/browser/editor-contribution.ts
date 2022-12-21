@@ -1,38 +1,44 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { EditorManager } from './editor-manager';
 import { TextEditor } from './editor';
 import { injectable, inject, optional } from '@theia/core/shared/inversify';
 import { StatusBarAlignment, StatusBar } from '@theia/core/lib/browser/status-bar/status-bar';
-import { FrontendApplicationContribution, DiffUris, DockLayout, QuickInputService, KeybindingRegistry, KeybindingContribution } from '@theia/core/lib/browser';
+import {
+    FrontendApplicationContribution, DiffUris, DockLayout,
+    QuickInputService, KeybindingRegistry, KeybindingContribution, SHELL_TABBAR_CONTEXT_SPLIT, ApplicationShell
+} from '@theia/core/lib/browser';
 import { ContextKeyService } from '@theia/core/lib/browser/context-key-service';
-import { CommandHandler, DisposableCollection } from '@theia/core';
+import { CommandHandler, DisposableCollection, MenuContribution, MenuModelRegistry } from '@theia/core';
 import { EditorCommands } from './editor-command';
 import { CommandRegistry, CommandContribution } from '@theia/core/lib/common';
 import { LanguageService } from '@theia/core/lib/browser/language-service';
 import { SUPPORTED_ENCODINGS } from '@theia/core/lib/browser/supported-encodings';
 import { nls } from '@theia/core/lib/common/nls';
+import { CurrentWidgetCommandAdapter } from '@theia/core/lib/browser/shell/current-widget-command-adapter';
+import { EditorWidget } from './editor-widget';
 
 @injectable()
-export class EditorContribution implements FrontendApplicationContribution, CommandContribution, KeybindingContribution {
+export class EditorContribution implements FrontendApplicationContribution, CommandContribution, KeybindingContribution, MenuContribution {
 
     @inject(StatusBar) protected readonly statusBar: StatusBar;
     @inject(EditorManager) protected readonly editorManager: EditorManager;
     @inject(LanguageService) protected readonly languages: LanguageService;
+    @inject(ApplicationShell) protected readonly shell: ApplicationShell;
 
     @inject(ContextKeyService)
     protected readonly contextKeyService: ContextKeyService;
@@ -95,7 +101,7 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
             alignment: StatusBarAlignment.RIGHT,
             priority: 1,
             command: EditorCommands.CHANGE_LANGUAGE.id,
-            tooltip: nls.localize('vscode/editorStatus/selectLanguageMode', 'Select Language Mode')
+            tooltip: nls.localizeByDefault('Select Language Mode')
         });
     }
 
@@ -109,7 +115,7 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
             alignment: StatusBarAlignment.RIGHT,
             priority: 10,
             command: EditorCommands.CHANGE_ENCODING.id,
-            tooltip: nls.localize('vscode/editorStatus/selectEncoding', 'Select Encoding')
+            tooltip: nls.localizeByDefault('Select Encoding')
         });
     }
 
@@ -120,7 +126,7 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
         }
         const { cursor } = editor;
         this.statusBar.setElement('editor-status-cursor-position', {
-            text: nls.localize('vscode/editorStatus/singleSelection', 'Ln {0}, Col {1}', (cursor.line + 1).toString(), editor.getVisibleColumn(cursor).toString()),
+            text: nls.localizeByDefault('Ln {0}, Col {1}', cursor.line + 1, editor.getVisibleColumn(cursor)),
             alignment: StatusBarAlignment.RIGHT,
             priority: 100,
             tooltip: EditorCommands.GOTO_LINE_COLUMN.label,
@@ -132,15 +138,13 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
         commands.registerCommand(EditorCommands.SHOW_ALL_OPENED_EDITORS, {
             execute: () => this.quickInputService?.open('edt ')
         });
-        const splitHandlerFactory = (splitMode: DockLayout.InsertMode): CommandHandler => ({
-            isEnabled: () => !!this.editorManager.currentEditor,
-            isVisible: () => !!this.editorManager.currentEditor,
-            execute: async () => {
-                const { currentEditor } = this.editorManager;
-                if (currentEditor) {
-                    const selection = currentEditor.editor.selection;
-                    const newEditor = await this.editorManager.openToSide(currentEditor.editor.uri, { selection, widgetOptions: { mode: splitMode } });
-                    const oldEditorState = currentEditor.editor.storeViewState();
+        const splitHandlerFactory = (splitMode: DockLayout.InsertMode): CommandHandler => new CurrentWidgetCommandAdapter(this.shell, {
+            isEnabled: title => title?.owner instanceof EditorWidget,
+            execute: async title => {
+                if (title?.owner instanceof EditorWidget) {
+                    const selection = title.owner.editor.selection;
+                    const newEditor = await this.editorManager.openToSide(title.owner.editor.uri, { selection, widgetOptions: { mode: splitMode, ref: title.owner } });
+                    const oldEditorState = title.owner.editor.storeViewState();
                     newEditor.editor.restoreViewState(oldEditorState);
                 }
             }
@@ -165,6 +169,29 @@ export class EditorContribution implements FrontendApplicationContribution, Comm
         keybindings.registerKeybinding({
             command: EditorCommands.SPLIT_EDITOR_VERTICAL.id,
             keybinding: 'ctrlcmd+k ctrlcmd+\\',
+        });
+    }
+
+    registerMenus(registry: MenuModelRegistry): void {
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_UP.id,
+            label: nls.localizeByDefault('Split Up'),
+            order: '1',
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_DOWN.id,
+            label: nls.localizeByDefault('Split Down'),
+            order: '2',
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_LEFT.id,
+            label: nls.localizeByDefault('Split Left'),
+            order: '3',
+        });
+        registry.registerMenuAction(SHELL_TABBAR_CONTEXT_SPLIT, {
+            commandId: EditorCommands.SPLIT_EDITOR_RIGHT.id,
+            label: nls.localizeByDefault('Split Right'),
+            order: '4',
         });
     }
 }

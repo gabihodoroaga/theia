@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -21,7 +21,7 @@ import {
     PluginDeployerResolver, PluginDeployerFileHandler, PluginDeployerDirectoryHandler,
     PluginDeployerEntry, PluginDeployer, PluginDeployerParticipant, PluginDeployerStartContext,
     PluginDeployerResolverInit, PluginDeployerFileHandlerContext,
-    PluginDeployerDirectoryHandlerContext, PluginDeployerEntryType, PluginDeployerHandler, PluginType
+    PluginDeployerDirectoryHandlerContext, PluginDeployerEntryType, PluginDeployerHandler, PluginType, UnresolvedPluginEntry
 } from '../../common/plugin-protocol';
 import { PluginDeployerEntryImpl } from './plugin-deployer-entry-impl';
 import {
@@ -33,7 +33,7 @@ import { PluginDeployerFileHandlerContextImpl } from './plugin-deployer-file-han
 import { PluginDeployerDirectoryHandlerContextImpl } from './plugin-deployer-directory-handler-context-impl';
 import { ILogger, Emitter, ContributionProvider } from '@theia/core';
 import { PluginCliContribution } from './plugin-cli-contribution';
-import { performance } from 'perf_hooks';
+import { Measurement, Stopwatch } from '@theia/core/lib/common';
 
 @injectable()
 export class PluginDeployerImpl implements PluginDeployer {
@@ -49,6 +49,9 @@ export class PluginDeployerImpl implements PluginDeployer {
 
     @inject(PluginCliContribution)
     protected readonly cliContribution: PluginCliContribution;
+
+    @inject(Stopwatch)
+    protected readonly stopwatch: Stopwatch;
 
     /**
      * Inject all plugin resolvers found at runtime.
@@ -117,13 +120,19 @@ export class PluginDeployerImpl implements PluginDeployer {
             }
         }
 
-        const startDeployTime = performance.now();
-        const [userPlugins, systemPlugins] = await Promise.all([
-            this.resolvePlugins(context.userEntries, PluginType.User),
-            this.resolvePlugins(context.systemEntries, PluginType.System)
-        ]);
-        await this.deployPlugins([...userPlugins, ...systemPlugins]);
-        this.logMeasurement('Deploy plugins list', startDeployTime);
+        const deployPlugins = this.measure('deployPlugins');
+        const unresolvedUserEntries = context.userEntries.map(id => ({
+            id,
+            type: PluginType.User
+        }));
+        const unresolvedSystemEntries = context.systemEntries.map(id => ({
+            id,
+            type: PluginType.System
+        }));
+        const plugins = await this.resolvePlugins([...unresolvedUserEntries, ...unresolvedSystemEntries]);
+        deployPlugins.log('Resolve plugins list');
+        await this.deployPlugins(plugins);
+        deployPlugins.log('Deploy plugins list');
     }
 
     async undeploy(pluginId: string): Promise<void> {
@@ -132,50 +141,53 @@ export class PluginDeployerImpl implements PluginDeployer {
         }
     }
 
-    async deploy(pluginEntry: string, type: PluginType = PluginType.System): Promise<void> {
-        const startDeployTime = performance.now();
-        await this.deployMultipleEntries([pluginEntry], type);
-        this.logMeasurement('Deploy plugin entry', startDeployTime);
+    async deploy(plugin: UnresolvedPluginEntry): Promise<void> {
+        const deploy = this.measure('deploy');
+        await this.deployMultipleEntries([plugin]);
+        deploy.log(`Deploy plugin ${plugin}`);
     }
 
-    protected async deployMultipleEntries(pluginEntries: ReadonlyArray<string>, type: PluginType = PluginType.System): Promise<void> {
-        const pluginsToDeploy = await this.resolvePlugins(pluginEntries, type);
+    protected async deployMultipleEntries(plugins: UnresolvedPluginEntry[]): Promise<void> {
+        const pluginsToDeploy = await this.resolvePlugins(plugins);
         await this.deployPlugins(pluginsToDeploy);
     }
 
     /**
      * Resolves plugins for the given type.
      *
-     * One can call it multiple times for different types before triggering a single deploy, i.e.
+     * Only call it a single time before triggering a single deploy to prevent re-resolving of extension dependencies, i.e.
      * ```ts
      * const deployer: PluginDeployer;
-     * deployer.deployPlugins([
-     *     ...await deployer.resolvePlugins(userEntries, PluginType.User),
-     *     ...await deployer.resolvePlugins(systemEntries, PluginType.System)
-     * ]);
+     * deployer.deployPlugins(await deployer.resolvePlugins(allPluginEntries));
      * ```
      */
-    async resolvePlugins(pluginEntries: ReadonlyArray<string>, type: PluginType): Promise<PluginDeployerEntry[]> {
+    async resolvePlugins(plugins: UnresolvedPluginEntry[]): Promise<PluginDeployerEntry[]> {
         const visited = new Set<string>();
         const pluginsToDeploy = new Map<string, PluginDeployerEntry>();
 
-        let queue = [...pluginEntries];
+        let queue: UnresolvedPluginEntry[] = [...plugins];
         while (queue.length) {
-            const dependenciesChunk: Array<Map<string, string>> = [];
-            const workload: string[] = [];
+            const dependenciesChunk: Array<{
+                dependencies: Map<string, string>
+                type: PluginType
+            }> = [];
+            const workload: UnresolvedPluginEntry[] = [];
             while (queue.length) {
                 const current = queue.shift()!;
-                if (visited.has(current)) {
+                if (visited.has(current.id)) {
                     continue;
                 } else {
                     workload.push(current);
                 }
-                visited.add(current);
+                visited.add(current.id);
             }
             queue = [];
-            await Promise.all(workload.map(async current => {
+            await Promise.all(workload.map(async ({ id, type }) => {
+                if (type === undefined) {
+                    type = PluginType.System;
+                }
                 try {
-                    const pluginDeployerEntries = await this.resolvePlugin(current, type);
+                    const pluginDeployerEntries = await this.resolvePlugin(id, type);
                     await this.applyFileHandlers(pluginDeployerEntries);
                     await this.applyDirectoryFileHandlers(pluginDeployerEntries);
                     for (const deployerEntry of pluginDeployerEntries) {
@@ -183,18 +195,21 @@ export class PluginDeployerImpl implements PluginDeployer {
                         if (dependencies && !pluginsToDeploy.has(dependencies.metadata.model.id)) {
                             pluginsToDeploy.set(dependencies.metadata.model.id, deployerEntry);
                             if (dependencies.mapping) {
-                                dependenciesChunk.push(dependencies.mapping);
+                                dependenciesChunk.push({ dependencies: dependencies.mapping, type });
                             }
                         }
                     }
                 } catch (e) {
-                    console.error(`Failed to resolve plugins from '${current}'`, e);
+                    console.error(`Failed to resolve plugins from '${id}'`, e);
                 }
             }));
-            for (const dependencies of dependenciesChunk) {
+            for (const { dependencies, type } of dependenciesChunk) {
                 for (const [dependency, deployableDependency] of dependencies) {
                     if (!pluginsToDeploy.has(dependency)) {
-                        queue.push(deployableDependency);
+                        queue.push({
+                            id: deployableDependency,
+                            type
+                        });
                     }
                 }
             }
@@ -299,7 +314,7 @@ export class PluginDeployerImpl implements PluginDeployer {
         return pluginDeployerEntries;
     }
 
-    protected logMeasurement(prefix: string, startTime: number): void {
-        console.log(`${prefix} took: ${(performance.now() - startTime).toFixed(1)} ms`);
+    protected measure(name: string): Measurement {
+        return this.stopwatch.start(name);
     }
 }

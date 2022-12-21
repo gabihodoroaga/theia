@@ -1,35 +1,40 @@
-/********************************************************************************
- * Copyright (C) 2020 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as os from 'os';
 import * as path from 'path';
+import * as semver from 'semver';
 import * as fs from '@theia/core/shared/fs-extra';
 import { v4 as uuidv4 } from 'uuid';
 import * as requestretry from 'requestretry';
 import { injectable, inject } from '@theia/core/shared/inversify';
 import URI from '@theia/core/lib/common/uri';
-import { PluginDeployerResolver, PluginDeployerResolverContext } from '@theia/plugin-ext/lib/common/plugin-protocol';
+import { PluginDeployerHandler, PluginDeployerResolver, PluginDeployerResolverContext } from '@theia/plugin-ext/lib/common/plugin-protocol';
 import { VSXExtensionUri } from '../common/vsx-extension-uri';
 import { OVSXClientProvider } from '../common/ovsx-client-provider';
+import { VSXExtensionRaw } from '@theia/ovsx-client';
 
 @injectable()
 export class VSXExtensionResolver implements PluginDeployerResolver {
 
     @inject(OVSXClientProvider)
     protected clientProvider: OVSXClientProvider;
+
+    @inject(PluginDeployerHandler)
+    protected pluginDeployerHandler: PluginDeployerHandler;
 
     protected readonly downloadPath: string;
 
@@ -61,6 +66,12 @@ export class VSXExtensionResolver implements PluginDeployerResolver {
         const downloadUrl = extension.files.download;
         console.log(`[${id}]: resolved to '${resolvedId}'`);
 
+        const existingVersion = this.hasSameOrNewerVersion(id, extension);
+        if (existingVersion) {
+            console.log(`[${id}]: is already installed with the same or newer version '${existingVersion}'`);
+            return;
+        }
+
         const extensionPath = path.resolve(this.downloadPath, path.basename(downloadUrl));
         console.log(`[${resolvedId}]: trying to download from "${downloadUrl}"...`);
         if (!await this.download(downloadUrl, extensionPath)) {
@@ -69,6 +80,18 @@ export class VSXExtensionResolver implements PluginDeployerResolver {
         }
         console.log(`[${resolvedId}]: downloaded to ${extensionPath}"`);
         context.addPlugin(resolvedId, extensionPath);
+    }
+
+    protected hasSameOrNewerVersion(id: string, extension: VSXExtensionRaw): string | undefined {
+        const existingPlugin = this.pluginDeployerHandler.getDeployedPlugin(id);
+        if (existingPlugin) {
+            const existingVersion = semver.clean(existingPlugin.metadata.model.version);
+            const desiredVersion = semver.clean(extension.version);
+            if (desiredVersion && existingVersion && semver.gte(existingVersion, desiredVersion)) {
+                return existingVersion;
+            }
+        }
+        return undefined;
     }
 
     protected async download(downloadUrl: string, downloadPath: string): Promise<boolean> {

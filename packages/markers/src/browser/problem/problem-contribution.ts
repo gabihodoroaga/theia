@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import debounce = require('@theia/core/shared/lodash.debounce');
 import { injectable, inject } from '@theia/core/shared/inversify';
@@ -55,7 +55,7 @@ export namespace ProblemsCommands {
         category: 'Problems',
         label: 'Clear All',
         iconClass: codicon('clear-all')
-    }, 'theia/markers/clearAll', 'vscode/markers.contribution/problems');
+    }, 'theia/markers/clearAll', nls.getDefaultKey('Problems'));
 }
 
 @injectable()
@@ -68,7 +68,7 @@ export class ProblemContribution extends AbstractViewContribution<ProblemWidget>
     constructor() {
         super({
             widgetId: PROBLEMS_WIDGET_ID,
-            widgetName: nls.localize('vscode/markers.contribution/problems', 'Problems'),
+            widgetName: nls.localizeByDefault('Problems'),
             defaultWidgetOptions: {
                 area: 'bottom'
             },
@@ -110,24 +110,23 @@ export class ProblemContribution extends AbstractViewContribution<ProblemWidget>
      */
     protected getStatusBarTooltip(stat: ProblemStat): string {
         if (stat.errors <= 0 && stat.warnings <= 0 && stat.infos <= 0) {
-            return nls.localize('vscode/markers.contribution/noProblems', 'No Problems');
+            return nls.localizeByDefault('No Problems');
         }
-        const localize = (text: string, value: number): string => nls.localize(`vscode/markers.contribution/total${text}`, `{0} ${text}`, value.toString());
         const tooltip: string[] = [];
         if (stat.errors > 0) {
-            tooltip.push(localize('Errors', stat.errors));
+            tooltip.push(nls.localizeByDefault('{0} Errors', stat.errors));
         }
         if (stat.warnings > 0) {
-            tooltip.push(localize('Warnings', stat.warnings));
+            tooltip.push(nls.localizeByDefault('{0} Warnings', stat.warnings));
         }
         if (stat.infos > 0) {
-            tooltip.push(localize('Infos', stat.infos));
+            tooltip.push(nls.localizeByDefault('{0} Infos', stat.infos));
         }
         return tooltip.join(', ');
 
     }
 
-    registerCommands(commands: CommandRegistry): void {
+    override registerCommands(commands: CommandRegistry): void {
         super.registerCommands(commands);
         commands.registerCommand(ProblemsCommands.COLLAPSE_ALL, {
             execute: () => this.collapseAllProblems()
@@ -160,21 +159,21 @@ export class ProblemContribution extends AbstractViewContribution<ProblemWidget>
         });
     }
 
-    registerMenus(menus: MenuModelRegistry): void {
+    override registerMenus(menus: MenuModelRegistry): void {
         super.registerMenus(menus);
         menus.registerMenuAction(ProblemsMenu.CLIPBOARD, {
             commandId: ProblemsCommands.COPY.id,
-            label: nls.localize('vscode/markers.contribution/copyMarker', 'Copy'),
+            label: nls.localizeByDefault('Copy'),
             order: '0'
         });
         menus.registerMenuAction(ProblemsMenu.CLIPBOARD, {
             commandId: ProblemsCommands.COPY_MESSAGE.id,
-            label: nls.localize('vscode/markers.contribution/copyMessage', 'Copy Message'),
+            label: nls.localizeByDefault('Copy Message'),
             order: '1'
         });
         menus.registerMenuAction(ProblemsMenu.PROBLEMS, {
             commandId: ProblemsCommands.COLLAPSE_ALL.id,
-            label: nls.localize('vscode/markers.contribution/collapseAll', 'Collapse All'),
+            label: nls.localizeByDefault('Collapse All'),
             order: '2'
         });
     }
@@ -183,7 +182,7 @@ export class ProblemContribution extends AbstractViewContribution<ProblemWidget>
         toolbarRegistry.registerItem({
             id: ProblemsCommands.COLLAPSE_ALL_TOOLBAR.id,
             command: ProblemsCommands.COLLAPSE_ALL_TOOLBAR.id,
-            tooltip: nls.localize('vscode/markers.contribution/collapseAll', 'Collapse All'),
+            tooltip: nls.localizeByDefault('Collapse All'),
             priority: 0,
         });
         toolbarRegistry.registerItem({

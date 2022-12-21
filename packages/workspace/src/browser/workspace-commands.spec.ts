@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2021 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2021 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { enableJSDOM } from '@theia/core/lib/browser/test/jsdom';
 let disableJSDOM = enableJSDOM();
@@ -39,6 +39,7 @@ import { WorkspaceDuplicateHandler } from './workspace-duplicate-handler';
 import { WorkspacePreferences } from './workspace-preferences';
 import { WorkspaceService } from './workspace-service';
 import { ApplicationServer } from '@theia/core/lib/common/application-protocol';
+import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 
 disableJSDOM();
 
@@ -88,6 +89,7 @@ describe('workspace-commands', () => {
         container.bind(WorkspaceDuplicateHandler).toConstantValue(<WorkspaceDuplicateHandler>{});
         container.bind(WorkspacePreferences).toConstantValue(<WorkspacePreferences>{});
         container.bind(WorkspaceService).toConstantValue(<WorkspaceService>{});
+        container.bind(ClipboardService).toConstantValue(<ClipboardService>{});
         container.bind(ApplicationServer).toConstantValue(<ApplicationServer>{
             getBackendOS(): Promise<OS.Type> {
                 return Promise.resolve(OS.type());

@@ -1,28 +1,29 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
-import * as electron from '../../../shared/electron';
+import * as electron from '../../../electron-shared/electron';
+import * as electronRemote from '../../../electron-shared/@electron/remote';
 import { inject, injectable } from 'inversify';
 import {
     Command, CommandContribution, CommandRegistry,
     isOSX, isWindows, MenuModelRegistry, MenuContribution, Disposable, nls
 } from '../../common';
 import {
-    ApplicationShell, codicon, ConfirmDialog, KeybindingContribution, KeybindingRegistry,
-    PreferenceScope, Widget, FrontendApplication, FrontendApplicationContribution, CommonMenus, CommonCommands, Dialog
+    codicon, ConfirmDialog, KeybindingContribution, KeybindingRegistry,
+    PreferenceScope, Widget, FrontendApplication, FrontendApplicationContribution, CommonMenus, CommonCommands, Dialog,
 } from '../../browser';
 import { ElectronMainMenuFactory } from './electron-main-menu-factory';
 import { FrontendApplicationStateService, FrontendApplicationState } from '../../browser/frontend-application-state';
@@ -30,44 +31,45 @@ import { FrontendApplicationConfigProvider } from '../../browser/frontend-applic
 import { RequestTitleBarStyle, Restart, TitleBarStyleAtStartup, TitleBarStyleChanged } from '../../electron-common/messaging/electron-messages';
 import { ZoomLevel } from '../window/electron-window-preferences';
 import { BrowserMenuBarContribution } from '../../browser/menu/browser-menu-plugin';
+import { WindowService } from '../../browser/window/window-service';
 
 import '../../../src/electron-browser/menu/electron-menu-style.css';
 
 export namespace ElectronCommands {
-    export const TOGGLE_DEVELOPER_TOOLS = Command.toLocalizedCommand({
+    export const TOGGLE_DEVELOPER_TOOLS = Command.toDefaultLocalizedCommand({
         id: 'theia.toggleDevTools',
         label: 'Toggle Developer Tools'
-    }, 'vscode/developerActions/toggleDevTools');
-    export const RELOAD = Command.toLocalizedCommand({
+    });
+    export const RELOAD = Command.toDefaultLocalizedCommand({
         id: 'view.reload',
         label: 'Reload Window'
-    }, 'vscode/windowActions/reloadWindow');
-    export const ZOOM_IN = Command.toLocalizedCommand({
+    });
+    export const ZOOM_IN = Command.toDefaultLocalizedCommand({
         id: 'view.zoomIn',
         label: 'Zoom In'
-    }, 'vscode/windowActions/zoomIn');
-    export const ZOOM_OUT = Command.toLocalizedCommand({
+    });
+    export const ZOOM_OUT = Command.toDefaultLocalizedCommand({
         id: 'view.zoomOut',
         label: 'Zoom Out'
-    }, 'vscode/windowActions/zoomOut');
-    export const RESET_ZOOM = Command.toLocalizedCommand({
+    });
+    export const RESET_ZOOM = Command.toDefaultLocalizedCommand({
         id: 'view.resetZoom',
         label: 'Reset Zoom'
-    }, 'vscode/windowActions/zoomReset');
-    export const CLOSE_WINDOW = Command.toLocalizedCommand({
+    });
+    export const CLOSE_WINDOW = Command.toDefaultLocalizedCommand({
         id: 'close.window',
         label: 'Close Window'
-    }, 'vscode/windowActions/close');
-    export const TOGGLE_FULL_SCREEN = Command.toLocalizedCommand({
+    });
+    export const TOGGLE_FULL_SCREEN = Command.toDefaultLocalizedCommand({
         id: 'workbench.action.toggleFullScreen',
         category: CommonCommands.VIEW_CATEGORY,
         label: 'Toggle Full Screen'
-    }, 'vscode/windowActions/toggleFullScreen', CommonCommands.VIEW_CATEGORY_KEY);
+    });
 }
 
 export namespace ElectronMenus {
     export const VIEW_WINDOW = [...CommonMenus.VIEW, 'window'];
-    export const VIEW_ZOOM = [...CommonMenus.VIEW, 'zoom'];
+    export const VIEW_ZOOM = [...CommonMenus.VIEW_APPEARANCE_SUBMENU, '4_appearance_submenu_zoom'];
 }
 
 export namespace ElectronMenus {
@@ -84,23 +86,25 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
     @inject(FrontendApplicationStateService)
     protected readonly stateService: FrontendApplicationStateService;
 
+    @inject(WindowService)
+    protected readonly windowService: WindowService;
+
     protected titleBarStyleChangeFlag = false;
     protected titleBarStyle?: string;
 
     constructor(
-        @inject(ElectronMainMenuFactory) protected readonly factory: ElectronMainMenuFactory,
-        @inject(ApplicationShell) protected shell: ApplicationShell
+        @inject(ElectronMainMenuFactory) protected override readonly factory: ElectronMainMenuFactory
     ) {
         super(factory);
     }
 
-    onStart(app: FrontendApplication): void {
+    override onStart(app: FrontendApplication): void {
         this.handleTitleBarStyling(app);
         if (isOSX) {
             // OSX: Recreate the menus when changing windows.
             // OSX only has one menu bar for all windows, so we need to swap
             // between them as the user switches windows.
-            electron.remote.getCurrentWindow().on('focus', () => this.setMenu(app));
+            electronRemote.getCurrentWindow().on('focus', () => this.setMenu(app));
         }
         // Make sure the application menu is complete, once the frontend application is ready.
         // https://github.com/theia-ide/theia/issues/5100
@@ -125,18 +129,18 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
         this.hideTopPanel(app);
         electron.ipcRenderer.on(TitleBarStyleAtStartup, (_event, style: string) => {
             this.titleBarStyle = style;
+            this.setMenu(app);
             this.preferenceService.ready.then(() => {
                 this.preferenceService.set('window.titleBarStyle', this.titleBarStyle, PreferenceScope.User);
             });
         });
         electron.ipcRenderer.send(RequestTitleBarStyle);
         this.preferenceService.ready.then(() => {
-            this.setMenu(app);
-            electron.remote.getCurrentWindow().setMenuBarVisibility(['classic', 'visible'].includes(this.preferenceService.get('window.menuBarVisibility', 'classic')));
+            electronRemote.getCurrentWindow().setMenuBarVisibility(['classic', 'visible'].includes(this.preferenceService.get('window.menuBarVisibility', 'classic')));
         });
         this.preferenceService.onPreferenceChanged(change => {
             if (change.preferenceName === 'window.titleBarStyle') {
-                if (this.titleBarStyleChangeFlag && this.titleBarStyle !== change.newValue && electron.remote.getCurrentWindow().isFocused()) {
+                if (this.titleBarStyleChangeFlag && this.titleBarStyle !== change.newValue && electronRemote.getCurrentWindow().isFocused()) {
                     electron.ipcRenderer.send(TitleBarStyleChanged, change.newValue);
                     this.handleRequiredRestart();
                 }
@@ -173,9 +177,9 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
     }
 
     protected setMenu(app: FrontendApplication, electronMenu: electron.Menu | null = this.factory.createElectronMenuBar(),
-        electronWindow: electron.BrowserWindow = electron.remote.getCurrentWindow()): void {
+        electronWindow: electron.BrowserWindow = electronRemote.getCurrentWindow()): void {
         if (isOSX) {
-            electron.remote.Menu.setApplicationMenu(electronMenu);
+            electronRemote.Menu.setApplicationMenu(electronMenu);
         } else {
             this.hideTopPanel(app);
             if (this.titleBarStyle === 'custom' && !this.menuBar) {
@@ -228,12 +232,12 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
     protected async handleRequiredRestart(): Promise<void> {
         const msgNode = document.createElement('div');
         const message = document.createElement('p');
-        message.textContent = nls.localize('vscode/relauncher.contribution/relaunchSettingMessage', 'A setting has changed that requires a restart to take effect');
+        message.textContent = nls.localizeByDefault('A setting has changed that requires a restart to take effect.');
         const detail = document.createElement('p');
-        detail.textContent = nls.localize('vscode/relauncher.contribution/relaunchSettingDetail',
+        detail.textContent = nls.localizeByDefault(
             'Press the restart button to restart {0} and enable the setting.', FrontendApplicationConfigProvider.get().applicationName);
         msgNode.append(message, detail);
-        const restart = nls.localize('vscode/relauncher.contribution/restart', 'Restart');
+        const restart = nls.localizeByDefault('Restart');
         const dialog = new ConfirmDialog({
             title: restart,
             msg: msgNode,
@@ -241,17 +245,18 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
             cancel: Dialog.CANCEL
         });
         if (await dialog.open()) {
+            this.windowService.setSafeToShutDown();
             electron.ipcRenderer.send(Restart);
         }
     }
 
     registerCommands(registry: CommandRegistry): void {
 
-        const currentWindow = electron.remote.getCurrentWindow();
+        const currentWindow = electronRemote.getCurrentWindow();
 
         registry.registerCommand(ElectronCommands.TOGGLE_DEVELOPER_TOOLS, {
             execute: () => {
-                const webContent = electron.remote.getCurrentWebContents();
+                const webContent = electronRemote.getCurrentWebContents();
                 if (!webContent.isDevToolsOpened()) {
                     webContent.openDevTools();
                 } else {
@@ -261,7 +266,7 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
         });
 
         registry.registerCommand(ElectronCommands.RELOAD, {
-            execute: () => currentWindow.reload()
+            execute: () => this.windowService.reload()
         });
         registry.registerCommand(ElectronCommands.CLOSE_WINDOW, {
             execute: () => currentWindow.close()
@@ -358,6 +363,11 @@ export class ElectronMenuContribution extends BrowserMenuBarContribution impleme
         });
         registry.registerMenuAction(ElectronMenus.FILE_CLOSE, {
             commandId: ElectronCommands.CLOSE_WINDOW.id,
+        });
+        registry.registerMenuAction(CommonMenus.VIEW_APPEARANCE_SUBMENU_SCREEN, {
+            commandId: ElectronCommands.TOGGLE_FULL_SCREEN.id,
+            label: nls.localizeByDefault('Full Screen'),
+            order: '0'
         });
     }
 }

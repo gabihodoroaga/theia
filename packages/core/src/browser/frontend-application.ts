@@ -1,21 +1,21 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { inject, injectable, named } from 'inversify';
-import { ContributionProvider, CommandRegistry, MenuModelRegistry, isOSX } from '../common';
+import { ContributionProvider, CommandRegistry, MenuModelRegistry, isOSX, BackendStopwatch, LogLevel, Stopwatch } from '../common';
 import { MaybePromise } from '../common/types';
 import { KeybindingRegistry } from './keybinding';
 import { Widget } from './widgets';
@@ -52,10 +52,10 @@ export interface FrontendApplicationContribution {
 
     /**
      * Called on `beforeunload` event, right before the window closes.
-     * Return `true` in order to prevent exit.
+     * Return `true` or an OnWillStopAction in order to prevent exit.
      * Note: No async code allowed, this function has to run on one tick.
      */
-    onWillStop?(app: FrontendApplication): boolean | void;
+    onWillStop?(app: FrontendApplication): boolean | undefined | OnWillStopAction;
 
     /**
      * Called when an application is stopped or unloaded.
@@ -75,6 +75,29 @@ export interface FrontendApplicationContribution {
      * An event is emitted when a layout is initialized, but before the shell is attached.
      */
     onDidInitializeLayout?(app: FrontendApplication): MaybePromise<void>;
+}
+
+export interface OnWillStopAction {
+    /**
+     * @resolves to `true` if it is safe to close the application; `false` otherwise.
+     */
+    action: () => MaybePromise<boolean>;
+    /**
+     * A descriptive string for the reason preventing close.
+     */
+    reason: string;
+    /**
+     * A number representing priority. Higher priority items are run later.
+     * High priority implies that some options of this check will have negative impacts if
+     * the user subsequently cancels the shutdown.
+     */
+    priority?: number;
+}
+
+export namespace OnWillStopAction {
+    export function is(candidate: unknown): candidate is OnWillStopAction {
+        return typeof candidate === 'object' && !!candidate && 'action' in candidate && 'reason' in candidate;
+    }
 }
 
 const TIMER_WARNING_THRESHOLD = 100;
@@ -104,6 +127,12 @@ export class FrontendApplication {
     @inject(TooltipService)
     protected readonly tooltipService: TooltipService;
 
+    @inject(Stopwatch)
+    protected readonly stopwatch: Stopwatch;
+
+    @inject(BackendStopwatch)
+    protected readonly backendStopwatch: BackendStopwatch;
+
     constructor(
         @inject(CommandRegistry) protected readonly commands: CommandRegistry,
         @inject(MenuModelRegistry) protected readonly menus: MenuModelRegistry,
@@ -129,7 +158,9 @@ export class FrontendApplication {
      * - reveal the application shell if it was hidden by a startup indicator
      */
     async start(): Promise<void> {
-        await this.startContributions();
+        const startup = this.backendStopwatch.start('frontend');
+
+        await this.measure('startContributions', () => this.startContributions(), 'Start frontend contributions', false);
         this.stateService.state = 'started_contributions';
 
         const host = await this.getHost();
@@ -138,13 +169,15 @@ export class FrontendApplication {
         await animationFrame();
         this.stateService.state = 'attached_shell';
 
-        await this.initializeLayout();
+        await this.measure('initializeLayout', () => this.initializeLayout(), 'Initialize the workbench layout', false);
         this.stateService.state = 'initialized_layout';
         await this.fireOnDidInitializeLayout();
 
-        await this.revealShell(host);
+        await this.measure('revealShell', () => this.revealShell(host), 'Replace loading indicator with ready workbench UI (animation)', false);
         this.registerEventListeners();
         this.stateService.state = 'ready';
+
+        startup.then(idToken => this.backendStopwatch.stop(idToken, 'Frontend application start', []));
     }
 
     /**
@@ -243,7 +276,6 @@ export class FrontendApplication {
             return new Promise(resolve => {
                 window.requestAnimationFrame(() => {
                     startupElem.classList.add('theia-hidden');
-                    console.log(`Finished loading frontend application after ${(performance.now() / 1000).toFixed(3)} seconds`);
                     const preloadStyle = window.getComputedStyle(startupElem);
                     const transitionDuration = parseCssTime(preloadStyle.transitionDuration, 0);
                     window.setTimeout(() => {
@@ -385,23 +417,9 @@ export class FrontendApplication {
         console.info('<<< All frontend contributions have been stopped.');
     }
 
-    protected async measure<T>(name: string, fn: () => MaybePromise<T>): Promise<T> {
-        const startMark = name + '-start';
-        const endMark = name + '-end';
-        performance.mark(startMark);
-        const result = await fn();
-        performance.mark(endMark);
-        performance.measure(name, startMark, endMark);
-        for (const item of performance.getEntriesByName(name)) {
-            const contribution = `Frontend ${item.name}`;
-            if (item.duration > TIMER_WARNING_THRESHOLD) {
-                console.warn(`${contribution} is slow, took: ${item.duration.toFixed(1)} ms`);
-            } else {
-                console.debug(`${contribution} took: ${item.duration.toFixed(1)} ms`);
-            }
-        }
-        performance.clearMeasures(name);
-        return result;
+    protected async measure<T>(name: string, fn: () => MaybePromise<T>, message = `Frontend ${name}`, threshold = true): Promise<T> {
+        return this.stopwatch.startAsync(name, message, fn,
+            threshold ? { thresholdMillis: TIMER_WARNING_THRESHOLD, defaultLogLevel: LogLevel.DEBUG } : {});
     }
 
 }

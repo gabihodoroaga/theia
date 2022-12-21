@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { Widget, Message, BaseWidget, Key, StatefulWidget, MessageLoop, KeyCode, codicon } from '@theia/core/lib/browser';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
@@ -40,7 +40,7 @@ export interface SearchFieldState {
 export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidget {
 
     static ID = 'search-in-workspace';
-    static LABEL = nls.localize('vscode/search.contribution/search', 'Search');
+    static LABEL = nls.localizeByDefault('Search');
 
     protected matchCaseState: SearchFieldState;
     protected wholeWordState: SearchFieldState;
@@ -86,7 +86,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
     protected readonly onDidUpdateEmitter = new Emitter<void>();
     readonly onDidUpdate: Event<void> = this.onDidUpdateEmitter.event;
 
-    @inject(SearchInWorkspaceResultTreeWidget) protected readonly resultTreeWidget: SearchInWorkspaceResultTreeWidget;
+    @inject(SearchInWorkspaceResultTreeWidget) readonly resultTreeWidget: SearchInWorkspaceResultTreeWidget;
     @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService;
 
     @inject(SearchInWorkspaceContextKeyService)
@@ -118,17 +118,17 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         this.matchCaseState = {
             className: codicon('case-sensitive'),
             enabled: false,
-            title: nls.localize('vscode/findInputCheckboxes/caseDescription', 'Match Case')
+            title: nls.localizeByDefault('Match Case')
         };
         this.wholeWordState = {
             className: codicon('whole-word'),
             enabled: false,
-            title: nls.localize('vscode/findInputCheckboxes/wordsDescription', 'Match Whole Word')
+            title: nls.localizeByDefault('Match Whole Word')
         };
         this.regExpState = {
             className: codicon('regex'),
             enabled: false,
-            title: nls.localize('vscode/findInputCheckboxes/regexDescription', 'Use Regular Expression')
+            title: nls.localizeByDefault('Use Regular Expression')
         };
         this.includeIgnoredState = {
             className: codicon('eye'),
@@ -197,9 +197,9 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         this.regExpState = oldState.regExpState;
         this.includeIgnoredState = oldState.includeIgnoredState;
         // Override the title of the restored state, as we could have changed languages in between
-        this.matchCaseState.title = nls.localize('vscode/findInputCheckboxes/caseDescription', 'Match Case');
-        this.wholeWordState.title = nls.localize('vscode/findInputCheckboxes/wordsDescription', 'Match Whole Word');
-        this.regExpState.title = nls.localize('vscode/findInputCheckboxes/regexDescription', 'Use Regular Expression');
+        this.matchCaseState.title = nls.localizeByDefault('Match Case');
+        this.wholeWordState.title = nls.localizeByDefault('Match Whole Word');
+        this.regExpState.title = nls.localizeByDefault('Use Regular Expression');
         this.includeIgnoredState.title = nls.localize('theia/search-in-workspace/includeIgnoredFiles', 'Include Ignored Files');
         this.showSearchDetails = oldState.showSearchDetails;
         this.searchInWorkspaceOptions = oldState.searchInWorkspaceOptions;
@@ -220,9 +220,9 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         const values = Array.from(new Set(uris.map(uri => `${uri}/**`)));
         const value = values.join(', ');
         this.searchInWorkspaceOptions.include = values;
-        const include = document.getElementById('include-glob-field');
-        if (include) {
-            (include as HTMLInputElement).value = value;
+        if (this.includeRef.current) {
+            this.includeRef.current.value = value;
+            this.includeRef.current.addToHistory();
         }
         this.update();
     }
@@ -234,9 +234,9 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
      */
     updateSearchTerm(term: string, showReplaceField?: boolean): void {
         this.searchTerm = term;
-        const search = document.getElementById('search-input-field');
-        if (search) {
-            (search as HTMLInputElement).value = term;
+        if (this.searchRef.current) {
+            this.searchRef.current.value = term;
+            this.searchRef.current.addToHistory();
         }
         if (showReplaceField) {
             this.showReplaceField = true;
@@ -284,21 +284,23 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         this.matchCaseState.enabled = false;
         this.wholeWordState.enabled = false;
         this.regExpState.enabled = false;
-        const search = document.getElementById('search-input-field');
-        const replace = document.getElementById('replace-input-field');
-        const include = document.getElementById('include-glob-field');
-        const exclude = document.getElementById('exclude-glob-field');
-        if (search && replace && include && exclude) {
-            (search as HTMLInputElement).value = '';
-            (replace as HTMLInputElement).value = '';
-            (include as HTMLInputElement).value = '';
-            (exclude as HTMLInputElement).value = '';
+        if (this.searchRef.current) {
+            this.searchRef.current.value = '';
+        }
+        if (this.replaceRef.current) {
+            this.replaceRef.current.value = '';
+        }
+        if (this.includeRef.current) {
+            this.includeRef.current.value = '';
+        }
+        if (this.excludeRef.current) {
+            this.excludeRef.current.value = '';
         }
         this.performSearch();
         this.update();
     }
 
-    protected onAfterAttach(msg: Message): void {
+    protected override onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
         ReactDOM.render(<React.Fragment>{this.renderSearchHeader()}{this.renderSearchInfo()}</React.Fragment>, this.searchFormContainer);
         Widget.attach(this.resultTreeWidget, this.contentNode);
@@ -307,7 +309,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         }));
     }
 
-    protected onUpdateRequest(msg: Message): void {
+    protected override onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         const searchInfo = this.renderSearchInfo();
         if (searchInfo) {
@@ -316,23 +318,23 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         }
     }
 
-    protected onResize(msg: Widget.ResizeMessage): void {
+    protected override onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
         MessageLoop.sendMessage(this.resultTreeWidget, Widget.ResizeMessage.UnknownSize);
     }
 
-    protected onAfterShow(msg: Message): void {
+    protected override onAfterShow(msg: Message): void {
         super.onAfterShow(msg);
         this.focusInputField();
         this.contextKeyService.searchViewletVisible.set(true);
     }
 
-    protected onAfterHide(msg: Message): void {
+    protected override onAfterHide(msg: Message): void {
         super.onAfterHide(msg);
         this.contextKeyService.searchViewletVisible.set(false);
     }
 
-    protected onActivateRequest(msg: Message): void {
+    protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
         this.focusInputField();
     }
@@ -367,7 +369,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
     protected renderReplaceFieldToggle(): React.ReactNode {
         const toggle = <span className={codicon(this.showReplaceField ? 'chevron-down' : 'chevron-right')}></span>;
         return <div
-            title={nls.localize('vscode/findWidget/label.toggleReplaceButton', 'Toggle Replace')}
+            title={nls.localizeByDefault('Toggle Replace')}
             className='replace-toggle'
             tabIndex={0}
             onClick={e => {
@@ -408,17 +410,6 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         this.update();
     }
 
-    /**
-     * @deprecated use `blurSearchFieldContainer` instead.
-     */
-    protected readonly unfocusSearchFieldContainer = this.blurSearchFieldContainer;
-    /**
-     * @deprecated use `doBlurSearchFieldContainer` instead.
-     */
-    protected doUnfocusSearchFieldContainer(): void {
-        this.doBlurSearchFieldContainer();
-    }
-
     private _searchTimeout: number;
     protected readonly search = (e: React.KeyboardEvent) => {
         e.persist();
@@ -452,9 +443,14 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
     protected performSearch(): void {
         const searchOptions: SearchInWorkspaceOptions = {
             ...this.searchInWorkspaceOptions,
+            followSymlinks: this.shouldFollowSymlinks(),
             matchCase: this.shouldMatchCase()
         };
         this.resultTreeWidget.search(this.searchTerm, searchOptions);
+    }
+
+    protected shouldFollowSymlinks(): boolean {
+        return this.searchInWorkspacePreferences['search.followSymlinks'];
     }
 
     /**
@@ -515,7 +511,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
 
     protected renderReplaceField(): React.ReactNode {
         const replaceAllButtonContainer = this.renderReplaceAllButtonContainer();
-        const replace = nls.localize('vscode/findWidget/label.replaceButton', 'Replace');
+        const replace = nls.localizeByDefault('Replace');
         return <div className={`replace-field${this.showReplaceField ? '' : ' hidden'}`}>
             <SearchInWorkspaceInput
                 id='replace-input-field'
@@ -525,6 +521,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
                 size={1}
                 placeholder={replace}
                 defaultValue={this.replaceTerm}
+                autoComplete='off'
                 onKeyUp={this.updateReplaceTerm}
                 onFocus={this.handleFocusReplaceInputBox}
                 onBlur={this.handleBlurReplaceInputBox}
@@ -542,7 +539,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
         const enabled: boolean = this.searchTerm !== '' && this.resultNumber > 0;
         return <div className='replace-all-button-container'>
             <span
-                title={nls.localize('vscode/findWidget/label.replaceAllButton', 'Replace All')}
+                title={nls.localizeByDefault('Replace All')}
                 className={`${codicon('replace-all', true)} ${enabled ? ' ' : ' disabled'}`}
                 onClick={() => {
                     if (enabled) {
@@ -598,7 +595,7 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
     protected renderExpandGlobFieldsButton(): React.ReactNode {
         return <div className='button-container'>
             <span
-                title={nls.localize('vscode/searchView/moreSearch', 'Toggle Search Details')}
+                title={nls.localizeByDefault('Toggle Search Details')}
                 className={codicon('ellipsis')}
                 onClick={() => {
                     this.showSearchDetails = !this.showSearchDetails;
@@ -610,14 +607,14 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
     protected renderGlobField(kind: 'include' | 'exclude'): React.ReactNode {
         const currentValue = this.searchInWorkspaceOptions[kind];
         const value = currentValue && currentValue.join(', ') || '';
-        const labelKey = `vscode/searchView/searchScope.${kind}s`;
         return <div className='glob-field'>
-            <div className='label'>{nls.localize(labelKey, 'files to ' + kind)}</div>
+            <div className='label'>{nls.localizeByDefault('files to ' + kind)}</div>
             <SearchInWorkspaceInput
                 className='theia-input'
                 type='text'
                 size={1}
                 defaultValue={value}
+                autoComplete='off'
                 id={kind + '-glob-field'}
                 onKeyUp={e => {
                     if (e.target) {
@@ -679,28 +676,28 @@ export class SearchInWorkspaceWidget extends BaseWidget implements StatefulWidge
 
             let message: string;
             if (isIncludesPresent && isExcludesPresent) {
-                message = nls.localize('vscode/searchView/noResultsIncludesExcludes', "No results found in '{0}' excluding '{1}' - ",
+                message = nls.localizeByDefault("No results found in '{0}' excluding '{1}' - ",
                     this.searchInWorkspaceOptions.include!.toString(), this.searchInWorkspaceOptions.exclude!.toString());
             } else if (isIncludesPresent) {
-                message = nls.localize('vscode/searchView/noResultsIncludes', "No results found in '{0}' - ",
+                message = nls.localizeByDefault("No results found in '{0}' - ",
                     this.searchInWorkspaceOptions.include!.toString());
             } else if (isExcludesPresent) {
-                message = nls.localize('vscode/searchView/noResultsExcludes', "No results found excluding '{0}' - ",
+                message = nls.localizeByDefault("No results found excluding '{0}' - ",
                     this.searchInWorkspaceOptions.exclude!.toString());
             } else {
-                message = nls.localize('vscode/searchView/noResultsFound', 'No results found. - ');
+                message = nls.localizeByDefault('No results found') + ' - ';
             }
             // We have to trim here as vscode will always add a trailing " - " string
             return message.substring(0, message.length - 2).trim();
         } else {
             if (this.resultNumber === 1 && this.resultTreeWidget.fileNumber === 1) {
-                return nls.localize('vscode/searchView/search.file.result', '{0} result in {1} file',
+                return nls.localizeByDefault('{0} result in {1} file',
                     this.resultNumber.toString(), this.resultTreeWidget.fileNumber.toString());
             } else if (this.resultTreeWidget.fileNumber === 1) {
-                return nls.localize('vscode/searchView/search.file.results', '{0} results in {1} file',
+                return nls.localizeByDefault('{0} results in {1} file',
                     this.resultNumber.toString(), this.resultTreeWidget.fileNumber.toString());
             } else if (this.resultTreeWidget.fileNumber > 0) {
-                return nls.localize('vscode/searchView/search.files.results', '{0} results in {1} files',
+                return nls.localizeByDefault('{0} results in {1} files',
                     this.resultNumber.toString(), this.resultTreeWidget.fileNumber.toString());
             } else {
                 // if fileNumber === 0, return undefined so that `onUpdateRequest()` would not re-render component

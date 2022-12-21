@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2018 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as React from '@theia/core/shared/react';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
@@ -79,15 +79,15 @@ export class DebugConfigurationWidget extends ReactWidget {
     render(): React.ReactNode {
         const { options } = this;
         return <React.Fragment>
-            <DebugAction run={this.start} label={nls.localize('vscode/debugCommands/startDebug', 'Start Debugging')} iconClass='debug-start' ref={this.setStepRef} />
+            <DebugAction run={this.start} label={nls.localizeByDefault('Start Debugging')} iconClass='debug-start' ref={this.setStepRef} />
             <select className='theia-select debug-configuration' value={this.currentValue} onChange={this.setCurrentConfiguration}>
-                {options.length ? options : <option value='__NO_CONF__'>{nls.localize('vscode/debugActionViewItems/noConfigurations', 'No Configurations')}</option>}
+                {options.length ? options : <option value='__NO_CONF__'>{nls.localizeByDefault('No Configurations')}</option>}
                 <option disabled>{'Add Configuration...'.replace(/./g, '-')}</option>
-                <option value='__ADD_CONF__'>{nls.localize('vscode/debugActionViewItems/addConfiguration', 'Add Configuration...')}</option>
+                <option value='__ADD_CONF__'>{nls.localizeByDefault('Add Configuration...')}</option>
             </select>
-            <DebugAction run={this.openConfiguration} label={nls.localize('vscode/debugCommands/openLaunchJson', 'Open "launch.json"', '"launch.json"')}
+            <DebugAction run={this.openConfiguration} label={nls.localizeByDefault('Open {0}', '"launch.json"')}
                 iconClass='settings-gear' />
-            <DebugAction run={this.openConsole} label={nls.localize('vscode/repl/debugConsole', 'Debug Console')} iconClass='terminal' />
+            <DebugAction run={this.openConsole} label={nls.localizeByDefault('Debug Console')} iconClass='terminal' />
         </React.Fragment>;
     }
     protected get currentValue(): string {

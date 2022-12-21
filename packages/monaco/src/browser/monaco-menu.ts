@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import { injectable, inject } from '@theia/core/shared/inversify';
 import { MenuContribution, MenuModelRegistry, MAIN_MENU_BAR, MenuPath } from '@theia/core/lib/common';
@@ -52,7 +52,7 @@ export class MonacoEditorMenuContribution implements MenuContribution {
 
         this.registerPeekSubmenu(registry);
 
-        registry.registerSubmenu(MonacoMenus.SELECTION, nls.localize('vscode/menubar/mSelection', 'Selection'));
+        registry.registerSubmenu(MonacoMenus.SELECTION, nls.localizeByDefault('Selection'));
         for (const item of MenuRegistry.getMenuItems(monaco.actions.MenuId.MenubarSelectionMenu)) {
             if (!monaco.actions.isIMenuItem(item)) {
                 continue;
@@ -70,7 +70,7 @@ export class MonacoEditorMenuContribution implements MenuContribution {
         // Builtin monaco language features commands.
         registry.registerMenuAction(EditorMainMenu.LANGUAGE_FEATURES_GROUP, {
             commandId: 'editor.action.quickOutline',
-            label: nls.localize('vscode/gotoSymbolQuickAccess/gotoSymbol', 'Go to Symbol in Editor...'),
+            label: nls.localizeByDefault('Go to Symbol in Editor...'),
             order: '1'
         });
         registry.registerMenuAction(EditorMainMenu.LANGUAGE_FEATURES_GROUP, {
@@ -102,18 +102,18 @@ export class MonacoEditorMenuContribution implements MenuContribution {
         // Builtin monaco problem commands.
         registry.registerMenuAction(MonacoMenus.MARKERS_GROUP, {
             commandId: 'editor.action.marker.nextInFiles',
-            label: nls.localize('vscode/gotoError/miGotoNextProblem', 'Next Problem'),
+            label: nls.localizeByDefault('Next Problem'),
             order: '1'
         });
         registry.registerMenuAction(MonacoMenus.MARKERS_GROUP, {
             commandId: 'editor.action.marker.prevInFiles',
-            label: nls.localize('vscode/gotoError/miGotoPreviousProblem', 'Previous Problem'),
+            label: nls.localizeByDefault('Previous Problem'),
             order: '2'
         });
     }
 
     protected registerPeekSubmenu(registry: MenuModelRegistry): void {
-        registry.registerSubmenu(MonacoMenus.PEEK_CONTEXT_SUBMENU, nls.localize('vscode/goToCommands/peek.submenu', 'Peek'));
+        registry.registerSubmenu(MonacoMenus.PEEK_CONTEXT_SUBMENU, nls.localizeByDefault('Peek'));
 
         for (const item of MenuRegistry.getMenuItems(monaco.actions.MenuId.EditorContextPeek)) {
             if (!monaco.actions.isIMenuItem(item)) {

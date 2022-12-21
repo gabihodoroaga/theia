@@ -1,22 +1,22 @@
-/********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2017 TypeFox and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import * as electron from '../../../shared/electron';
+import * as electron from '../../../electron-shared/electron';
 import { inject, injectable, postConstruct } from 'inversify';
 import {
     ContextMenuRenderer, RenderContextMenuOptions, ContextMenuAccess, FrontendApplicationContribution, CommonCommands, coordinateFromAnchor, PreferenceService
@@ -99,14 +99,16 @@ export class ElectronContextMenuRenderer extends BrowserContextMenuRenderer {
         electron.ipcRenderer.send(RequestTitleBarStyle);
     }
 
-    protected doRender(options: RenderContextMenuOptions): ContextMenuAccess {
+    protected override doRender(options: RenderContextMenuOptions): ContextMenuAccess {
         if (this.useNativeStyle) {
             const { menuPath, anchor, args, onHide } = options;
             const menu = this.electronMenuFactory.createElectronContextMenu(menuPath, args);
             const { x, y } = coordinateFromAnchor(anchor);
             const zoom = electron.webFrame.getZoomFactor();
+            // TODO: Remove the offset once Electron fixes https://github.com/electron/electron/issues/31641
+            const offset = process.platform === 'win32' ? 0 : 2;
             // x and y values must be Ints or else there is a conversion error
-            menu.popup({ x: Math.round(x * zoom), y: Math.round(y * zoom) });
+            menu.popup({ x: Math.round(x * zoom) + offset, y: Math.round(y * zoom) + offset });
             // native context menu stops the event loop, so there is no keyboard events
             this.context.resetAltPressed();
             if (onHide) {

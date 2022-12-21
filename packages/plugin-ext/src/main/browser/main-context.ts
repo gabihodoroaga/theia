@@ -1,24 +1,24 @@
-/********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2018 Red Hat, Inc. and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 import { interfaces } from '@theia/core/shared/inversify';
 import { CommandRegistryMainImpl } from './command-registry-main';
 import { PreferenceRegistryMainImpl } from './preference-registry-main';
 import { QuickOpenMainImpl } from './quick-open-main';
 import { RPCProtocol } from '../../common/rpc-protocol';
-import { PLUGIN_RPC_CONTEXT, LanguagesMainFactory, OutputChannelRegistryFactory } from '../../common/plugin-api-rpc';
+import { PLUGIN_RPC_CONTEXT, LanguagesMainFactory, OutputChannelRegistryFactory, MAIN_RPC_CONTEXT } from '../../common/plugin-api-rpc';
 import { MessageRegistryMainImpl } from './message-registry-main';
 import { WindowStateMain } from './window-state-main';
 import { WorkspaceMainImpl } from './workspace-main';
@@ -29,7 +29,7 @@ import { TerminalServiceMainImpl } from './terminal-main';
 import { DialogsMainImpl } from './dialogs-main';
 import { TreeViewsMainImpl } from './view/tree-views-main';
 import { NotificationMainImpl } from './notification-main';
-import { ConnectionMainImpl } from './connection-main';
+import { ConnectionImpl } from '../../common/connection';
 import { WebviewsMainImpl } from './webviews-main';
 import { TasksMainImpl } from './tasks-main';
 import { StorageMainImpl } from './plugin-storage';
@@ -47,7 +47,6 @@ import { ApplicationShell } from '@theia/core/lib/browser/shell/application-shel
 import { MonacoBulkEditService } from '@theia/monaco/lib/browser/monaco-bulk-edit-service';
 import { MonacoEditorService } from '@theia/monaco/lib/browser/monaco-editor-service';
 import { UntitledResourceResolver } from './editor/untitled-resource';
-import { FileResourceResolver } from '@theia/filesystem/lib/browser';
 import { MainFileSystemEventService } from './main-file-system-event-service';
 import { LabelServiceMainImpl } from './label-service-main';
 import { TimelineMainImpl } from './timeline-main';
@@ -56,6 +55,7 @@ import { ThemingMainImpl } from './theming-main';
 import { CommentsMainImp } from './comments/comments-main';
 import { CustomEditorsMainImpl } from './custom-editors/custom-editors-main';
 import { SecretsMainImpl } from './secrets-main';
+import { WebviewViewsMainImpl } from './webview-views/webview-views-main';
 
 export function setUpPluginApi(rpc: RPCProtocol, container: interfaces.Container): void {
     const authenticationMain = new AuthenticationMainImpl(rpc, container);
@@ -86,8 +86,7 @@ export function setUpPluginApi(rpc: RPCProtocol, container: interfaces.Container
     const openerService = container.get<OpenerService>(OpenerService);
     const shell = container.get(ApplicationShell);
     const untitledResourceResolver = container.get(UntitledResourceResolver);
-    const fileResourceResolver = container.get(FileResourceResolver);
-    const documentsMain = new DocumentsMainImpl(editorsAndDocuments, modelService, rpc, editorManager, openerService, shell, untitledResourceResolver, fileResourceResolver);
+    const documentsMain = new DocumentsMainImpl(editorsAndDocuments, modelService, rpc, editorManager, openerService, shell, untitledResourceResolver);
     rpc.set(PLUGIN_RPC_CONTEXT.DOCUMENTS_MAIN, documentsMain);
 
     const bulkEditService = container.get(MonacoBulkEditService);
@@ -127,10 +126,13 @@ export function setUpPluginApi(rpc: RPCProtocol, container: interfaces.Container
     const customEditorsMain = new CustomEditorsMainImpl(rpc, container, webviewsMain);
     rpc.set(PLUGIN_RPC_CONTEXT.CUSTOM_EDITORS_MAIN, customEditorsMain);
 
+    const webviewViewsMain = new WebviewViewsMainImpl(rpc, container, webviewsMain);
+    rpc.set(PLUGIN_RPC_CONTEXT.WEBVIEW_VIEWS_MAIN, webviewViewsMain);
+
     const storageMain = new StorageMainImpl(container);
     rpc.set(PLUGIN_RPC_CONTEXT.STORAGE_MAIN, storageMain);
 
-    const connectionMain = new ConnectionMainImpl(rpc);
+    const connectionMain = new ConnectionImpl(rpc.getProxy(MAIN_RPC_CONTEXT.CONNECTION_EXT));
     rpc.set(PLUGIN_RPC_CONTEXT.CONNECTION_MAIN, connectionMain);
 
     const tasksMain = new TasksMainImpl(rpc, container);

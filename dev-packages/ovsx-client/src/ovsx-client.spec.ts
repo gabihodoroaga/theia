@@ -1,18 +1,18 @@
-/********************************************************************************
- * Copyright (C) 2020 Ericsson and others.
- *
- * This program and the accompanying materials are made available under the
- * terms of the Eclipse Public License v. 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
- *
- * This Source Code may also be made available under the following Secondary
- * Licenses when the conditions for such availability set forth in the Eclipse
- * Public License v. 2.0 are satisfied: GNU General Public License, version 2
- * with the GNU Classpath Exception which is available at
- * https://www.gnu.org/software/classpath/license.html.
- *
- * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
- ********************************************************************************/
+// *****************************************************************************
+// Copyright (C) 2020 Ericsson and others.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License v. 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0.
+//
+// This Source Code may also be made available under the following Secondary
+// Licenses when the conditions for such availability set forth in the Eclipse
+// Public License v. 2.0 are satisfied: GNU General Public License, version 2
+// with the GNU Classpath Exception which is available at
+// https://www.gnu.org/software/classpath/license.html.
+//
+// SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+// *****************************************************************************
 
 import * as chai from 'chai';
 import { OVSXClient } from './ovsx-client';
@@ -105,6 +105,13 @@ describe('OVSX Client', () => {
             expect(client['isVersionLTE']('1.40.0', '1.50.0')).equal(true, 'should be satisfied since v1 is less than v2');
             expect(client['isVersionLTE']('1.50.0', '1.50.0')).equal(true, 'should be satisfied since v1 and v2 are equal');
             expect(client['isVersionLTE']('2.0.2', '2.0.1')).equal(false, 'should not be satisfied since v1 is greater than v2');
+        });
+
+        it('should support \'preview\' versions', () => {
+            expect(client['isVersionLTE']('1.40.0-next.622cb03f7e0', '1.50.0')).equal(true, 'should be satisfied since v1 is less than v2');
+            expect(client['isVersionLTE']('1.50.0-next.622cb03f7e0', '1.50.0')).equal(true, 'should be satisfied since v1 and v2 are equal');
+            expect(client['isVersionLTE']('1.50.0-next.622cb03f7e0', '1.50.0-next.622cb03f7e0')).equal(true, 'should be satisfied since v1 and v2 are equal');
+            expect(client['isVersionLTE']('2.0.2-next.622cb03f7e0', '2.0.1')).equal(false, 'should not be satisfied since v1 is greater than v2');
         });
 
     });
