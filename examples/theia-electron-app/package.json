@@ -1,0 +1,110 @@
+{
+  "private": true,
+  "name": "@theia/theia-electron-app",
+  "productName": "Theia Electron Example",
+  "version": "1.33.0",
+  "main": "scripts/theia-electron-main.js",
+  "license": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
+  "theia": {
+    "target": "electron",
+    "frontend": {
+      "config": {
+        "applicationName": "Theia",
+        "electron": {
+          "disallowReloadKeybinding": true,
+          "windowOptions": {
+            "webPreferences": {
+              "nodeIntegration": true,
+              "contextIsolation": false,
+              "enableRemoteModule": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@theia/api-samples": "1.33.0",
+    "@theia/bulk-edit": "1.33.0",
+    "@theia/callhierarchy": "1.33.0",
+    "@theia/console": "1.33.0",
+    "@theia/core": "1.33.0",
+    "@theia/debug": "1.33.0",
+    "@theia/editor": "1.33.0",
+    "@theia/editor-preview": "1.33.0",
+    "@theia/electron": "1.33.0",
+    "@theia/external-terminal": "1.33.0",
+    "@theia/file-search": "1.33.0",
+    "@theia/filesystem": "1.33.0",
+    "@theia/getting-started": "1.33.0",
+    "@theia/git": "1.33.0",
+    "@theia/keymaps": "1.33.0",
+    "@theia/markers": "1.33.0",
+    "@theia/memory-inspector": "1.33.0",
+    "@theia/messages": "1.33.0",
+    "@theia/metrics": "1.33.0",
+    "@theia/mini-browser": "1.33.0",
+    "@theia/monaco": "1.33.0",
+    "@theia/navigator": "1.33.0",
+    "@theia/outline-view": "1.33.0",
+    "@theia/output": "1.33.0",
+    "@theia/plugin-dev": "1.33.0",
+    "@theia/plugin-ext": "1.33.0",
+    "@theia/plugin-ext-vscode": "1.33.0",
+    "@theia/preferences": "1.33.0",
+    "@theia/preview": "1.33.0",
+    "@theia/process": "1.33.0",
+    "@theia/property-view": "1.33.0",
+    "@theia/scm": "1.33.0",
+    "@theia/scm-extra": "1.33.0",
+    "@theia/search-in-workspace": "1.33.0",
+    "@theia/task": "1.33.0",
+    "@theia/terminal": "1.33.0",
+    "@theia/timeline": "1.33.0",
+    "@theia/toolbar": "1.33.0",
+    "@theia/typehierarchy": "1.33.0",
+    "@theia/userstorage": "1.33.0",
+    "@theia/variable-resolver": "1.33.0",
+    "@theia/vsx-registry": "1.33.0",
+    "@theia/workspace": "1.33.0"
+  },
+  "scripts": {
+    "lint": "theiaext lint",
+    "clean": "theia clean",
+    "build": "theiaext compile && yarn bundle",
+    "bundle": "theia build --mode production",
+    "watch": "concurrently -n compile,bundle \"theiaext watch --preserveWatchOutput\" \"theia build --watch --mode development\"",
+    "start": "theia start --plugins=local-dir:../../plugins",
+    "start:debug": "yarn start --log-level=debug",
+    "test": "electron-mocha --timeout 60000 \"./lib/test/**/*.espec.js\"",
+    "package": "electron-builder --publish=never",
+    "package:preview": "electron-builder --dir",
+    "download:plugins": "theia download:plugins"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.33.0",
+    "electron": "15.3.5",
+    "electron-builder": "23.6.0"
+  },
+  "theiaPluginsDir": "plugins",
+  "theiaPlugins": {
+    "eclipse-theia.builtin-extension-pack": "https://open-vsx.org/api/eclipse-theia/builtin-extension-pack/1.50.1/file/eclipse-theia.builtin-extension-pack-1.50.1.vsix",
+    "vscode.theme-abyss": "https://open-vsx.org/api/vscode/theme-abyss/1.62.3/file/vscode.theme-abyss-1.62.3.vsix",
+    "vscode.theme-defaults": "https://open-vsx.org/api/vscode/theme-defaults/1.62.3/file/vscode.theme-defaults-1.62.3.vsix",
+    "vscode.theme-kimbie-dark": "https://open-vsx.org/api/vscode/theme-kimbie-dark/1.62.3/file/vscode.theme-kimbie-dark-1.62.3.vsix",
+    "vscode.theme-monokai": "https://open-vsx.org/api/vscode/theme-monokai/1.62.3/file/vscode.theme-monokai-1.62.3.vsix",
+    "vscode.theme-monokai-dimmed": "https://open-vsx.org/api/vscode/theme-monokai-dimmed/1.62.3/file/vscode.theme-monokai-dimmed-1.62.3.vsix",
+    "vscode.theme-quietlight": "https://open-vsx.org/api/vscode/theme-quietlight/1.62.3/file/vscode.theme-quietlight-1.62.3.vsix",
+    "vscode.theme-red": "https://open-vsx.org/api/vscode/theme-red/1.62.3/file/vscode.theme-red-1.62.3.vsix",
+    "vscode.theme-solarized-dark": "https://open-vsx.org/api/vscode/theme-solarized-dark/1.62.3/file/vscode.theme-solarized-dark-1.62.3.vsix",
+    "vscode.theme-solarized-light": "https://open-vsx.org/api/vscode/theme-solarized-light/1.62.3/file/vscode.theme-solarized-light-1.62.3.vsix",
+    "vscode.theme-tomorrow-night-blue": "https://open-vsx.org/api/vscode/theme-tomorrow-night-blue/1.62.3/file/vscode.theme-tomorrow-night-blue-1.62.3.vsix",
+    "vscode.typescript": "https://open-vsx.org/api/vscode/typescript/1.62.3/file/vscode.typescript-1.62.3.vsix",
+    "vscode.typescript-language-features": "https://open-vsx.org/api/vscode/typescript-language-features/1.62.3/file/vscode.typescript-language-features-1.62.3.vsix",
+    "EditorConfig.EditorConfig": "https://open-vsx.org/api/EditorConfig/EditorConfig/0.14.4/file/EditorConfig.EditorConfig-0.14.4.vsix",
+    "dbaeumer.vscode-eslint": "https://open-vsx.org/api/dbaeumer/vscode-eslint/2.1.1/file/dbaeumer.vscode-eslint-2.1.1.vsix",
+    "ms-vscode.references-view": "https://open-vsx.org/api/ms-vscode/references-view/0.0.89/file/ms-vscode.references-view-0.0.89.vsix",
+    "vscode-go": "https://open-vsx.org/api/golang/Go/0.32.0/file/golang.Go-0.32.0.vsix",
+    "vscode-clangd": "https://open-vsx.org/api/llvm-vs-code-extensions/vscode-clangd/0.1.15/file/llvm-vs-code-extensions.vscode-clangd-0.1.15.vsix"
+  }
+}

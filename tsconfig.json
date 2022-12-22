@@ -46,6 +46,9 @@
       "path": "examples/playwright"
     },
     {
+      "path": "examples/theia-electron-app"
+    },
+    {
       "path": "packages/bulk-edit"
     },
     {
