@@ -21,6 +21,7 @@ import { ConsoleItem, CompositeConsoleItem } from '@theia/console/lib/browser/co
 import { DebugSession } from '../debug-session';
 import { Severity } from '@theia/core/lib/common/severity';
 import * as monaco from '@theia/monaco-editor-core';
+import { nls } from '@theia/core';
 
 export type DebugSessionProvider = () => DebugSession | undefined;
 
@@ -237,8 +238,9 @@ export class DebugVariable extends ExpressionContainer {
             return;
         }
         const input = new SingleTextInputDialog({
-            title: `Set ${this.name} Value`,
-            initialValue: this.value
+            title: nls.localize('theia/debug/debugVariableInput', 'Set {0} Value', this.name),
+            initialValue: this.value,
+            placeholder: nls.localizeByDefault('Value')
         });
         const newValue = await input.open();
         if (newValue) {

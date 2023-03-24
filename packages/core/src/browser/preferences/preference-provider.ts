@@ -20,7 +20,7 @@ import debounce = require('p-debounce');
 import { injectable, inject } from 'inversify';
 import { JSONExt, JSONValue } from '@phosphor/coreutils';
 import URI from '../../common/uri';
-import { Disposable, DisposableCollection, Emitter, Event } from '../../common';
+import { Disposable, DisposableCollection, Emitter, Event, isObject } from '../../common';
 import { Deferred } from '../../common/promise-util';
 import { PreferenceScope } from './preference-scope';
 import { PreferenceLanguageOverrideService } from './preference-language-override-service';
@@ -235,6 +235,9 @@ export abstract class PreferenceProvider implements Disposable {
                 if (JSONExt.isObject(source[key]) && JSONExt.isObject(value)) {
                     this.merge(source[key], value);
                     continue;
+                } else if (JSONExt.isArray(source[key]) && JSONExt.isArray(value)) {
+                    source[key] = [...JSONExt.deepCopy(source[key] as any), ...JSONExt.deepCopy(value)];
+                    continue;
                 }
             }
             source[key] = JSONExt.deepCopy(value);
@@ -253,16 +256,12 @@ export abstract class PreferenceProvider implements Disposable {
 
     protected getParsedContent(jsonData: any): { [key: string]: any } {
         const preferences: { [key: string]: any } = {};
-        if (typeof jsonData !== 'object') {
+        if (!isObject(jsonData)) {
             return preferences;
         }
-        // eslint-disable-next-line guard-for-in
-        for (const preferenceName in jsonData) {
-            const preferenceValue = jsonData[preferenceName];
+        for (const [preferenceName, preferenceValue] of Object.entries(jsonData)) {
             if (this.preferenceOverrideService.testOverrideValue(preferenceName, preferenceValue)) {
-                // eslint-disable-next-line guard-for-in
-                for (const overriddenPreferenceName in preferenceValue) {
-                    const overriddenValue = preferenceValue[overriddenPreferenceName];
+                for (const [overriddenPreferenceName, overriddenValue] of Object.entries(preferenceValue)) {
                     preferences[`${preferenceName}.${overriddenPreferenceName}`] = overriddenValue;
                 }
             } else {
@@ -270,5 +269,9 @@ export abstract class PreferenceProvider implements Disposable {
             }
         }
         return preferences;
+    }
+
+    canHandleScope(scope: PreferenceScope): boolean {
+        return true;
     }
 }

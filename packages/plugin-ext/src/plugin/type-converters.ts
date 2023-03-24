@@ -28,6 +28,7 @@ import * as types from './types-impl';
 import { UriComponents } from '../common/uri-components';
 import { isReadonlyArray } from '../common/arrays';
 import { MarkdownString as MarkdownStringDTO } from '@theia/core/lib/common/markdown-rendering';
+import { isObject } from '@theia/core/lib/common';
 
 const SIDE_GROUP = -2;
 const ACTIVE_GROUP = -1;
@@ -136,7 +137,7 @@ export function toPosition(position: Position): types.Position {
 }
 
 function isDecorationOptions(arg: unknown): arg is theia.DecorationOptions {
-    return !!arg && typeof arg === 'object' && typeof (arg as theia.DecorationOptions).range !== 'undefined';
+    return isObject<theia.DecorationOptions>(arg) && typeof arg.range !== 'undefined';
 }
 
 export function isDecorationOptionsArr(something: theia.Range[] | theia.DecorationOptions[]): something is theia.DecorationOptions[] {
@@ -180,9 +181,9 @@ interface Codeblock {
 }
 
 function isCodeblock(arg: unknown): arg is Codeblock {
-    return !!arg && typeof arg === 'object'
-        && typeof (arg as Codeblock).language === 'string'
-        && typeof (arg as Codeblock).value === 'string';
+    return isObject<Codeblock>(arg)
+        && typeof arg.language === 'string'
+        && typeof arg.value === 'string';
 }
 
 export function fromMarkdown(markup: theia.MarkdownString | theia.MarkedString): MarkdownStringDTO {
@@ -315,6 +316,14 @@ export function fromTextEdit(edit: theia.TextEdit): model.TextEdit {
     };
 }
 
+function fromSnippetTextEdit(edit: theia.SnippetTextEdit): model.TextEdit & { insertAsSnippet?: boolean } {
+    return {
+        text: edit.snippet.value,
+        range: fromRange(edit.range),
+        insertAsSnippet: true
+    };
+}
+
 export function convertDiagnosticToMarkerData(diagnostic: theia.Diagnostic): model.MarkerData {
     return {
         code: convertCode(diagnostic.code),
@@ -330,12 +339,15 @@ export function convertDiagnosticToMarkerData(diagnostic: theia.Diagnostic): mod
     };
 }
 
-function convertCode(code: string | number | undefined): string | undefined {
+export function convertCode(code: string | number | { value: string | number; target: theia.Uri } | undefined): string | undefined {
     if (typeof code === 'number') {
         return String(code);
-    } else {
-        return code;
     }
+    if (typeof code === 'string' || typeof code === 'undefined') {
+        return code;
+    } else {
+        return String(code.value);
+    };
 }
 
 function convertSeverity(severity: types.DiagnosticSeverity): types.MarkerSeverity {
@@ -566,7 +578,7 @@ export function fromWorkspaceEdit(value: theia.WorkspaceEdit, documents?: any): 
             const workspaceTextEditDto: WorkspaceTextEditDto = {
                 resource: uri,
                 modelVersionId: doc?.version,
-                textEdit: uriOrEdits.map(fromTextEdit)[0],
+                textEdit: uriOrEdits.map(edit => (edit instanceof types.TextEdit) ? fromTextEdit(edit) : fromSnippetTextEdit(edit))[0],
                 metadata: entry[2] as types.WorkspaceEditMetadata
             };
             result.edits.push(workspaceTextEditDto);
@@ -677,57 +689,47 @@ export function toSymbolTag(kind: model.SymbolTag): types.SymbolTag {
 }
 
 export function isModelLocation(arg: unknown): arg is model.Location {
-    if (!arg) {
-        return false;
-    }
-    return !!arg &&
-        typeof arg === 'object' &&
-        isModelRange((arg as model.Location).range) &&
-        isUriComponents((arg as model.Location).uri);
+    return isObject<model.Location>(arg) &&
+        isModelRange(arg.range) &&
+        isUriComponents(arg.uri);
 }
 
 export function isModelRange(arg: unknown): arg is model.Range {
-    const range = arg as model.Range;
-    return !!arg && typeof arg === 'object' &&
-        typeof range.startLineNumber === 'number' &&
-        typeof range.startColumn === 'number' &&
-        typeof range.endLineNumber === 'number' &&
-        typeof range.endColumn === 'number';
+    return isObject<model.Range>(arg) &&
+        typeof arg.startLineNumber === 'number' &&
+        typeof arg.startColumn === 'number' &&
+        typeof arg.endLineNumber === 'number' &&
+        typeof arg.endColumn === 'number';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isUriComponents(arg: unknown): arg is UriComponents {
-    const uriComponents = arg as UriComponents;
-    return !!arg && typeof arg === 'object' &&
-        typeof uriComponents.scheme === 'string' &&
-        typeof uriComponents.path === 'string' &&
-        typeof uriComponents.query === 'string' &&
-        typeof uriComponents.fragment === 'string';
+    return isObject<UriComponents>(arg) &&
+        typeof arg.scheme === 'string' &&
+        typeof arg.path === 'string' &&
+        typeof arg.query === 'string' &&
+        typeof arg.fragment === 'string';
 }
 
 export function isModelCallHierarchyItem(arg: unknown): arg is model.CallHierarchyItem {
-    const item = arg as model.CallHierarchyItem;
-    return !!item && typeof item === 'object'
-        && isModelRange(item.range)
-        && isModelRange(item.selectionRange)
-        && isUriComponents(item.uri)
-        && !!item.name;
+    return isObject<model.CallHierarchyItem>(arg)
+        && isModelRange(arg.range)
+        && isModelRange(arg.selectionRange)
+        && isUriComponents(arg.uri)
+        && !!arg.name;
 }
 
 export function isModelCallHierarchyIncomingCall(arg: unknown): arg is model.CallHierarchyIncomingCall {
-    const maybeIncomingCall = arg as model.CallHierarchyIncomingCall;
-    return !!arg && typeof arg === 'object' &&
-        'from' in maybeIncomingCall &&
-        'fromRanges' in maybeIncomingCall &&
-        isModelCallHierarchyItem(maybeIncomingCall.from);
+    return isObject<model.CallHierarchyIncomingCall>(arg) &&
+        'from' in arg &&
+        'fromRanges' in arg &&
+        isModelCallHierarchyItem(arg.from);
 }
 
 export function isModelCallHierarchyOutgoingCall(arg: unknown): arg is model.CallHierarchyOutgoingCall {
-    const maybeOutgoingCall = arg as model.CallHierarchyOutgoingCall;
-    return !!arg && typeof arg === 'object' &&
-        'to' in maybeOutgoingCall &&
-        'fromRanges' in maybeOutgoingCall &&
-        isModelCallHierarchyItem(maybeOutgoingCall.to);
+    return isObject<model.CallHierarchyOutgoingCall>(arg) &&
+        'to' in arg &&
+        'fromRanges' in arg &&
+        isModelCallHierarchyItem(arg.to);
 }
 
 export function toLocation(value: model.Location): types.Location {
@@ -781,12 +783,11 @@ export function toCallHierarchyOutgoingCall(value: model.CallHierarchyOutgoingCa
 }
 
 export function isModelTypeHierarchyItem(arg: unknown): arg is model.TypeHierarchyItem {
-    const item = arg as model.TypeHierarchyItem;
-    return !!item && typeof item === 'object'
-        && isModelRange(item.range)
-        && isModelRange(item.selectionRange)
-        && isUriComponents(item.uri)
-        && !!item.name;
+    return isObject<model.TypeHierarchyItem>(arg)
+        && isModelRange(arg.range)
+        && isModelRange(arg.selectionRange)
+        && isUriComponents(arg.uri)
+        && !!arg.name;
 }
 
 export function fromTypeHierarchyItem(item: types.TypeHierarchyItem): model.TypeHierarchyItem {
@@ -1298,6 +1299,28 @@ export namespace ThemableDecorationAttachmentRenderOptions {
     }
 }
 
+export namespace ViewColumn {
+    export function from(column?: theia.ViewColumn): rpc.EditorGroupColumn {
+        if (typeof column === 'number' && column >= types.ViewColumn.One) {
+            return column - 1; // adjust zero index (ViewColumn.ONE => 0)
+        }
+
+        if (column === types.ViewColumn.Beside) {
+            return SIDE_GROUP;
+        }
+
+        return ACTIVE_GROUP; // default is always the active group
+    }
+
+    export function to(position: rpc.EditorGroupColumn): theia.ViewColumn {
+        if (typeof position === 'number' && position >= 0) {
+            return position + 1; // adjust to index (ViewColumn.ONE => 1)
+        }
+
+        throw new Error('invalid \'EditorGroupColumn\'');
+    }
+}
+
 export function pathOrURIToURI(value: string | URI): URI {
     if (typeof value === 'undefined') {
         return value;
@@ -1323,5 +1346,42 @@ export namespace InlayHintKind {
     }
     export function to(kind: model.InlayHintKind): theia.InlayHintKind {
         return kind;
+    }
+}
+
+export namespace DataTransferItem {
+    export function to(mime: string, item: model.DataTransferItemDTO, resolveFileData: (itemId: string) => Promise<Uint8Array>): theia.DataTransferItem {
+        const file = item.fileData;
+        if (file) {
+            return new class extends types.DataTransferItem {
+                override asFile(): theia.DataTransferFile {
+                    return {
+                        name: file.name,
+                        uri: URI.revive(file.uri),
+                        data: () => resolveFileData(item.id),
+                    };
+                }
+            }('');
+        }
+
+        if (mime === 'text/uri-list' && item.uriListData) {
+            return new types.DataTransferItem(reviveUriList(item.uriListData));
+        }
+
+        return new types.DataTransferItem(item.asString);
+    }
+
+    function reviveUriList(parts: ReadonlyArray<string | UriComponents>): string {
+        return parts.map(part => typeof part === 'string' ? part : URI.revive(part).toString()).join('\r\n');
+    }
+}
+
+export namespace DataTransfer {
+    export function toDataTransfer(value: model.DataTransferDTO, resolveFileData: (itemId: string) => Promise<Uint8Array>): theia.DataTransfer {
+        const dataTransfer = new types.DataTransfer();
+        for (const [mimeType, item] of value.items) {
+            dataTransfer.set(mimeType, DataTransferItem.to(mimeType, item, resolveFileData));
+        }
+        return dataTransfer;
     }
 }

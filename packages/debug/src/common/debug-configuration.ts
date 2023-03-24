@@ -13,6 +13,7 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
 // *****************************************************************************
+import { isObject } from '@theia/core/lib/common';
 import { TaskIdentifier } from '@theia/task/lib/common';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -71,10 +72,22 @@ export interface DebugConfiguration {
 
     /** Task to run after debug session ends */
     postDebugTask?: string | TaskIdentifier;
+
+    /**
+     * When true, a save will not be triggered for open editors when starting a debug session,
+     * regardless of the value of the `debug.saveBeforeStart` setting.
+     */
+    suppressSaveBeforeStart?: boolean;
+
+    /** When true, the window statusbar color will not be changed for this session. */
+    suppressDebugStatusbar?: boolean;
+
+    /** When true, the debug viewlet will not be automatically revealed for this session. */
+    suppressDebugView?: boolean;
 }
 export namespace DebugConfiguration {
     export function is(arg: unknown): arg is DebugConfiguration {
-        return !!arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'request' in arg;
+        return isObject(arg) && 'type' in arg && 'name' in arg && 'request' in arg;
     }
 }
 
@@ -84,6 +97,9 @@ export interface DebugSessionOptions {
     consoleMode?: DebugConsoleMode;
     noDebug?: boolean;
     compact?: boolean;
+    suppressSaveBeforeStart?: boolean;
+    suppressDebugStatusbar?: boolean;
+    suppressDebugView?: boolean;
 }
 
 export enum DebugConsoleMode {

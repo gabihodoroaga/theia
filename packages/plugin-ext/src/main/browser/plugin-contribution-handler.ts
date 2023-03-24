@@ -21,7 +21,7 @@ import { TextmateRegistry, getEncodedLanguageId, MonacoTextmateService, GrammarD
 import { MenusContributionPointHandler } from './menus/menus-contribution-handler';
 import { PluginViewRegistry } from './view/plugin-view-registry';
 import { PluginCustomEditorRegistry } from './custom-editors/plugin-custom-editor-registry';
-import { PluginContribution, IndentationRules, FoldingRules, ScopeMap, DeployedPlugin, GrammarsContribution, EnterAction, OnEnterRule } from '../../common';
+import { PluginContribution, IndentationRules, FoldingRules, ScopeMap, DeployedPlugin, GrammarsContribution, EnterAction, OnEnterRule, RegExpOptions } from '../../common';
 import {
     DefaultUriLabelProviderContribution,
     LabelProviderContribution,
@@ -43,6 +43,10 @@ import { PluginIconThemeService } from './plugin-icon-theme-service';
 import { ContributionProvider } from '@theia/core/lib/common';
 import * as monaco from '@theia/monaco-editor-core';
 import { ThemeIcon } from '@theia/monaco-editor-core/esm/vs/platform/theme/common/themeService';
+import { ContributedTerminalProfileStore, TerminalProfileStore } from '@theia/terminal/lib/browser/terminal-profile-service';
+import { TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
+import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
+import { PluginTerminalRegistry } from './plugin-terminal-registry';
 
 @injectable()
 export class PluginContributionHandler {
@@ -105,6 +109,15 @@ export class PluginContributionHandler {
 
     @inject(PluginIconThemeService)
     protected readonly iconThemeService: PluginIconThemeService;
+
+    @inject(TerminalService)
+    protected readonly terminalService: TerminalService;
+
+    @inject(PluginTerminalRegistry)
+    protected readonly pluginTerminalRegistry: PluginTerminalRegistry;
+
+    @inject(ContributedTerminalProfileStore)
+    protected readonly contributedProfileStore: TerminalProfileStore;
 
     @inject(ContributionProvider) @named(LabelProviderContribution)
     protected readonly contributionProvider: ContributionProvider<LabelProviderContribution>;
@@ -356,6 +369,28 @@ export class PluginContributionHandler {
             }
         }
 
+        const self = this;
+        if (contributions.terminalProfiles) {
+            for (const profile of contributions.terminalProfiles) {
+                pushContribution(`terminalProfiles.${profile.id}`, () => {
+                    this.contributedProfileStore.registerTerminalProfile(profile.title, {
+                        async start(): Promise<TerminalWidget> {
+                            const terminalId = await self.pluginTerminalRegistry.start(profile.id);
+                            const result = self.terminalService.getById(terminalId);
+                            if (!result) {
+                                throw new Error(`Error starting terminal from profile ${profile.id}`);
+                            }
+                            return result;
+
+                        }
+                    });
+                    return Disposable.create(() => {
+                        this.contributedProfileStore.unregisterTerminalProfile(profile.id);
+                    });
+                });
+            }
+        }
+
         return toDispose;
     }
 
@@ -453,11 +488,14 @@ export class PluginContributionHandler {
         return Disposable.NULL;
     }
 
-    private createRegex(value: string | undefined): RegExp | undefined {
+    private createRegex(value: string | RegExpOptions | undefined): RegExp | undefined {
         if (typeof value === 'string') {
             return new RegExp(value, '');
         }
-        return undefined;
+        if (typeof value == 'undefined') {
+            return undefined;
+        }
+        return new RegExp(value.pattern, value.flags);
     }
 
     private convertIndentationRules(rules?: IndentationRules): monaco.languages.IndentationRule | undefined {

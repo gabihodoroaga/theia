@@ -61,6 +61,7 @@ import {
     CompletionItemKind,
     CompletionList,
     TextEdit,
+    SnippetTextEdit,
     CompletionTriggerKind,
     Diagnostic,
     DiagnosticRelatedInformation,
@@ -86,12 +87,15 @@ import {
     DocumentHighlightKind,
     DocumentHighlight,
     DocumentLink,
+    DocumentDropEdit,
     CodeLens,
     CodeActionKind,
     CodeActionTrigger,
     CodeActionTriggerKind,
     TextDocumentSaveReason,
     CodeAction,
+    DataTransferItem,
+    DataTransfer,
     TreeItem,
     TreeItemCollapsibleState,
     DocumentSymbol,
@@ -152,6 +156,9 @@ import {
     TextDocumentChangeReason,
     InputBoxValidationSeverity,
     TerminalLink,
+    TerminalLocation,
+    TerminalExitReason,
+    TerminalProfile,
     InlayHint,
     InlayHintKind,
     InlayHintLabelPart,
@@ -175,7 +182,15 @@ import {
     ExtensionKind,
     InlineCompletionItem,
     InlineCompletionList,
-    InlineCompletionTriggerKind
+    InlineCompletionTriggerKind,
+    TextTabInput,
+    CustomEditorTabInput,
+    NotebookDiffEditorTabInput,
+    NotebookEditorTabInput,
+    TerminalEditorTabInput,
+    TextDiffTabInput,
+    TextMergeTabInput,
+    WebviewEditorTabInput
 } from './types-impl';
 import { AuthenticationExtImpl } from './authentication-ext';
 import { SymbolKind } from '../common/plugin-api-rpc-model';
@@ -218,6 +233,7 @@ import { WebviewViewsExtImpl } from './webview-views';
 import { PluginPackage } from '../common';
 import { Endpoint } from '@theia/core/lib/browser/endpoint';
 import { FilePermission } from '@theia/filesystem/lib/common/files';
+import { TabsExtImpl } from './tabs';
 
 export function createAPIFactory(
     rpc: RPCProtocol,
@@ -243,11 +259,11 @@ export function createAPIFactory(
     const statusBarMessageRegistryExt = new StatusBarMessageRegistryExt(rpc);
     const terminalExt = rpc.set(MAIN_RPC_CONTEXT.TERMINAL_EXT, new TerminalServiceExtImpl(rpc));
     const outputChannelRegistryExt = rpc.set(MAIN_RPC_CONTEXT.OUTPUT_CHANNEL_REGISTRY_EXT, new OutputChannelRegistryExtImpl(rpc));
-    const languagesExt = rpc.set(MAIN_RPC_CONTEXT.LANGUAGES_EXT, new LanguagesExtImpl(rpc, documents, commandRegistry));
     const treeViewsExt = rpc.set(MAIN_RPC_CONTEXT.TREE_VIEWS_EXT, new TreeViewsExtImpl(rpc, commandRegistry));
     const tasksExt = rpc.set(MAIN_RPC_CONTEXT.TASKS_EXT, new TasksExtImpl(rpc, terminalExt));
     const connectionExt = rpc.set(MAIN_RPC_CONTEXT.CONNECTION_EXT, new ConnectionImpl(rpc.getProxy(PLUGIN_RPC_CONTEXT.CONNECTION_MAIN)));
-    const fileSystemExt = rpc.set(MAIN_RPC_CONTEXT.FILE_SYSTEM_EXT, new FileSystemExtImpl(rpc, languagesExt));
+    const fileSystemExt = rpc.set(MAIN_RPC_CONTEXT.FILE_SYSTEM_EXT, new FileSystemExtImpl(rpc));
+    const languagesExt = rpc.set(MAIN_RPC_CONTEXT.LANGUAGES_EXT, new LanguagesExtImpl(rpc, documents, commandRegistry, fileSystemExt));
     const extHostFileSystemEvent = rpc.set(MAIN_RPC_CONTEXT.ExtHostFileSystemEventService, new ExtHostFileSystemEventService(rpc, editorsAndDocumentsExt));
     const scmExt = rpc.set(MAIN_RPC_CONTEXT.SCM_EXT, new ScmExtImpl(rpc, commandRegistry));
     const decorationsExt = rpc.set(MAIN_RPC_CONTEXT.DECORATIONS_EXT, new DecorationsExtImpl(rpc));
@@ -255,6 +271,7 @@ export function createAPIFactory(
     const timelineExt = rpc.set(MAIN_RPC_CONTEXT.TIMELINE_EXT, new TimelineExtImpl(rpc, commandRegistry));
     const themingExt = rpc.set(MAIN_RPC_CONTEXT.THEMING_EXT, new ThemingExtImpl(rpc));
     const commentsExt = rpc.set(MAIN_RPC_CONTEXT.COMMENTS_EXT, new CommentsExtImpl(rpc, commandRegistry, documents));
+    const tabsExt = rpc.set(MAIN_RPC_CONTEXT.TABS_EXT, new TabsExtImpl(rpc));
     const customEditorExt = rpc.set(MAIN_RPC_CONTEXT.CUSTOM_EDITORS_EXT, new CustomEditorsExtImpl(rpc, documents, webviewExt, workspaceExt));
     const webviewViewsExt = rpc.set(MAIN_RPC_CONTEXT.WEBVIEW_VIEWS_EXT, new WebviewViewsExtImpl(rpc, webviewExt));
     rpc.set(MAIN_RPC_CONTEXT.DEBUG_EXT, debugExt);
@@ -496,7 +513,7 @@ export function createAPIFactory(
             onDidChangeWindowState(listener, thisArg?, disposables?): theia.Disposable {
                 return windowStateExt.onDidChangeWindowState(listener, thisArg, disposables);
             },
-            createTerminal(nameOrOptions: theia.TerminalOptions | theia.PseudoTerminalOptions | theia.ExtensionTerminalOptions | (string | undefined),
+            createTerminal(nameOrOptions: theia.TerminalOptions | theia.ExtensionTerminalOptions | theia.ExtensionTerminalOptions | (string | undefined),
                 shellPath?: string,
                 shellArgs?: string[] | string): theia.Terminal {
                 return terminalExt.createTerminal(nameOrOptions, shellPath, shellArgs);
@@ -510,7 +527,7 @@ export function createAPIFactory(
             registerTreeDataProvider<T>(viewId: string, treeDataProvider: theia.TreeDataProvider<T>): Disposable {
                 return treeViewsExt.registerTreeDataProvider(plugin, viewId, treeDataProvider);
             },
-            createTreeView<T>(viewId: string, options: { treeDataProvider: theia.TreeDataProvider<T> }): theia.TreeView<T> {
+            createTreeView<T>(viewId: string, options: theia.TreeViewOptions<T>): theia.TreeView<T> {
                 return treeViewsExt.createTreeView(plugin, viewId, options);
             },
             withScmProgress<R>(task: (progress: theia.Progress<number>) => Thenable<R>) {
@@ -536,11 +553,17 @@ export function createAPIFactory(
             registerTerminalLinkProvider(provider: theia.TerminalLinkProvider): theia.Disposable {
                 return terminalExt.registerTerminalLinkProvider(provider);
             },
+            registerTerminalProfileProvider(id: string, provider: theia.TerminalProfileProvider): theia.Disposable {
+                return terminalExt.registerTerminalProfileProvider(id, provider);
+            },
             get activeColorTheme(): theia.ColorTheme {
                 return themingExt.activeColorTheme;
             },
             onDidChangeActiveColorTheme(listener, thisArg?, disposables?) {
                 return themingExt.onDidChangeActiveColorTheme(listener, thisArg, disposables);
+            },
+            get tabGroups(): theia.TabGroups {
+                return tabsExt.tabGroups;
             }
         };
 
@@ -648,8 +671,8 @@ export function createAPIFactory(
             saveAll(includeUntitled?: boolean): PromiseLike<boolean> {
                 return editors.saveAll(includeUntitled);
             },
-            applyEdit(edit: theia.WorkspaceEdit): PromiseLike<boolean> {
-                return editors.applyWorkspaceEdit(edit);
+            applyEdit(edit: theia.WorkspaceEdit, metadata?: theia.WorkspaceEditMetadata): PromiseLike<boolean> {
+                return editors.applyWorkspaceEdit(edit, metadata);
             },
             registerTextDocumentContentProvider(scheme: string, provider: theia.TextDocumentContentProvider): theia.Disposable {
                 return workspaceExt.registerTextDocumentContentProvider(scheme, provider);
@@ -731,7 +754,8 @@ export function createAPIFactory(
 
         const extensions: typeof theia.extensions = Object.freeze({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            getExtension<T = any>(extensionId: string): theia.Extension<T> | undefined {
+            getExtension<T = any>(extensionId: string, includeFromDifferentExtensionHosts: boolean = false): theia.Extension<T> | undefined {
+                includeFromDifferentExtensionHosts = false;
                 const plg = pluginManager.getPluginById(extensionId.toLowerCase());
                 if (plg) {
                     return new PluginExt(pluginManager, plg);
@@ -741,6 +765,10 @@ export function createAPIFactory(
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             get all(): readonly theia.Extension<any>[] {
                 return pluginManager.getAllPlugins().map(plg => new PluginExt(pluginManager, plg));
+            },
+            get allAcrossExtensionHosts(): readonly theia.Extension<any>[] {
+                // we only support one extension host ATM so equivalent to calling "all()"
+                return this.all;
             },
             get onDidChange(): theia.Event<void> {
                 return pluginManager.onDidChange;
@@ -831,6 +859,9 @@ export function createAPIFactory(
                 ...moreTriggerCharacters: string[]
             ): theia.Disposable {
                 return languagesExt.registerOnTypeFormattingEditProvider(selector, provider, [firstTriggerCharacter].concat(moreTriggerCharacters), pluginToPluginInfo(plugin));
+            },
+            registerDocumentDropEditProvider(selector: theia.DocumentSelector, provider: theia.DocumentDropEditProvider) {
+                return languagesExt.registerDocumentDropEditProvider(selector, provider);
             },
             registerDocumentLinkProvider(selector: theia.DocumentSelector, provider: theia.DocumentLinkProvider): theia.Disposable {
                 return languagesExt.registerDocumentLinkProvider(selector, provider, pluginToPluginInfo(plugin));
@@ -1075,7 +1106,7 @@ export function createAPIFactory(
                         notebook: theia.NotebookDocument,
                         controller: theia.NotebookController
                     ): (void | Thenable<void>) { },
-                    onDidChangeSelectedNotebooks: () => Disposable.create(() => {}),
+                    onDidChangeSelectedNotebooks: () => Disposable.create(() => { }),
                     updateNotebookAffinity: (notebook: theia.NotebookDocument, affinity: theia.NotebookControllerAffinity) => undefined,
                     dispose: () => undefined,
                 };
@@ -1086,7 +1117,7 @@ export function createAPIFactory(
             ) {
                 return {
                     rendererId,
-                    onDidReceiveMessage: () => Disposable.create(() => {} ),
+                    onDidReceiveMessage: () => Disposable.create(() => { }),
                     postMessage: () => Promise.resolve({}),
                 };
             },
@@ -1156,6 +1187,7 @@ export function createAPIFactory(
             Diagnostic,
             CompletionTriggerKind,
             TextEdit,
+            SnippetTextEdit,
             ProgressLocation,
             ProgressOptions,
             Progress,
@@ -1173,12 +1205,15 @@ export function createAPIFactory(
             DocumentHighlightKind,
             DocumentHighlight,
             DocumentLink,
+            DocumentDropEdit,
             CodeLens,
             CodeActionKind,
             CodeActionTrigger,
             CodeActionTriggerKind,
             TextDocumentSaveReason,
             CodeAction,
+            DataTransferItem,
+            DataTransfer,
             TreeItem,
             TreeItemCollapsibleState,
             SymbolKind,
@@ -1236,6 +1271,7 @@ export function createAPIFactory(
             SourceControlInputBoxValidationType,
             FileDecoration,
             TerminalLink,
+            TerminalProfile,
             CancellationError,
             ExtensionMode,
             LinkedEditingRanges,
@@ -1262,7 +1298,17 @@ export function createAPIFactory(
             ExtensionKind,
             InlineCompletionItem,
             InlineCompletionList,
-            InlineCompletionTriggerKind
+            InlineCompletionTriggerKind,
+            TabInputText: TextTabInput,
+            TabInputTextDiff: TextDiffTabInput,
+            TabInputTextMerge: TextMergeTabInput,
+            TabInputCustom: CustomEditorTabInput,
+            TabInputNotebook: NotebookEditorTabInput,
+            TabInputNotebookDiff: NotebookDiffEditorTabInput,
+            TabInputWebview: WebviewEditorTabInput,
+            TabInputTerminal: TerminalEditorTabInput,
+            TerminalLocation,
+            TerminalExitReason
         };
     };
 }
@@ -1330,13 +1376,15 @@ export class PluginExt<T> extends Plugin<T> implements ExtensionPlugin<T> {
     extensionPath: string;
     extensionUri: theia.Uri;
     extensionKind: ExtensionKind;
+    isFromDifferentExtensionHost: boolean;
 
-    constructor(protected override readonly pluginManager: PluginManager, plugin: InternalPlugin) {
+    constructor(protected override readonly pluginManager: PluginManager, plugin: InternalPlugin, isFromDifferentExtensionHost = false) {
         super(pluginManager, plugin);
 
         this.extensionPath = this.pluginPath;
         this.extensionUri = this.pluginUri;
         this.extensionKind = ExtensionKind.UI; // stub as a local extension (not running on a remote workspace)
+        this.isFromDifferentExtensionHost = isFromDifferentExtensionHost;
     }
 
     override get isActive(): boolean {

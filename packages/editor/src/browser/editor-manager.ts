@@ -17,7 +17,7 @@
 import { injectable, postConstruct, inject } from '@theia/core/shared/inversify';
 import URI from '@theia/core/lib/common/uri';
 import { RecursivePartial, Emitter, Event, MaybePromise } from '@theia/core/lib/common';
-import { WidgetOpenerOptions, NavigatableWidgetOpenHandler, NavigatableWidgetOptions, Widget } from '@theia/core/lib/browser';
+import { WidgetOpenerOptions, NavigatableWidgetOpenHandler, NavigatableWidgetOptions, Widget, PreferenceService } from '@theia/core/lib/browser';
 import { EditorWidget } from './editor-widget';
 import { Range, Position, Location, TextEditor } from './editor';
 import { EditorWidgetFactory } from './editor-widget-factory';
@@ -53,6 +53,8 @@ export class EditorManager extends NavigatableWidgetOpenHandler<EditorWidget> {
      * Emit when the current editor is changed.
      */
     readonly onCurrentEditorChanged: Event<EditorWidget | undefined> = this.onCurrentEditorChangedEmitter.event;
+
+    @inject(PreferenceService) protected readonly preferenceService: PreferenceService;
 
     @postConstruct()
     protected override init(): void {
@@ -205,6 +207,13 @@ export class EditorManager extends NavigatableWidgetOpenHandler<EditorWidget> {
                     }
                 }
             }
+            // If the user has opted to prefer to open an existing editor even if it's on a different tab, check if we have anything about the URI.
+            if (this.preferenceService.get('workbench.editor.revealIfOpen', false)) {
+                const counter = this.getCounterForUri(uri);
+                if (counter !== undefined) {
+                    return super.open(uri, { counter, ...options });
+                }
+            }
             // Open a new widget.
             return super.open(uri, { counter: this.createCounterForUri(uri), ...options });
         }
@@ -253,6 +262,12 @@ export class EditorManager extends NavigatableWidgetOpenHandler<EditorWidget> {
 
     protected getSelection(widget: EditorWidget, selection: RecursivePartial<Range>): Range | Position | undefined {
         const { start, end } = selection;
+        if (Position.is(start)) {
+            if (Position.is(end)) {
+                return widget.editor.document.toValidRange({ start, end });
+            }
+            return widget.editor.document.toValidPosition(start);
+        }
         const line = start && start.line !== undefined && start.line >= 0 ? start.line : undefined;
         if (line === undefined) {
             return undefined;

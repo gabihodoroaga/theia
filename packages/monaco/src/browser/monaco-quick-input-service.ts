@@ -95,6 +95,7 @@ export class MonacoQuickInputImplementation implements IQuickInputService {
         this.themeService.initialized.then(() => this.controller.applyStyles(this.getStyles()));
         // Hook into the theming service of Monaco to ensure that the updates are ready.
         StandaloneServices.get(IStandaloneThemeService).onDidColorThemeChange(() => this.controller.applyStyles(this.getStyles()));
+        window.addEventListener('resize', () => this.updateLayout());
     }
 
     setContextKey(key: string | undefined): void {
@@ -176,7 +177,17 @@ export class MonacoQuickInputImplementation implements IQuickInputService {
 
     private initController(): void {
         this.controller = new QuickInputController(this.getOptions());
-        this.controller.layout({ width: 600, height: 1200 }, 0);
+        this.updateLayout();
+    }
+
+    private updateLayout(): void {
+        // Initialize the layout using screen dimensions as monaco computes the actual sizing.
+        // https://github.com/microsoft/vscode/blob/6261075646f055b99068d3688932416f2346dd3b/src/vs/base/parts/quickinput/browser/quickInput.ts#L1799
+        this.controller.layout(this.getClientDimension(), 0);
+    }
+
+    private getClientDimension(): monaco.editor.IDimension {
+        return { width: window.innerWidth, height: window.innerHeight };
     }
 
     private getOptions(): IQuickInputOptions {
@@ -185,7 +196,7 @@ export class MonacoQuickInputImplementation implements IQuickInputService {
             container: this.container,
             styles: { widget: {}, list: {}, inputBox: {}, countBadge: {}, button: {}, progressBar: {}, keybindingLabel: {}, },
             ignoreFocusOut: () => false,
-            isScreenReaderOptimized: () => true,
+            isScreenReaderOptimized: () => false, // TODO change to true once support is added.
             backKeybindingLabel: () => undefined,
             setContextKey: (id?: string) => this.setContextKey(id),
             returnFocus: () => this.container.focus(),
@@ -311,8 +322,7 @@ export class MonacoQuickInputService implements QuickInputService {
 
     showQuickPick<T extends QuickPickItem>(items: Array<T | QuickPickSeparator>, options?: QuickPickOptions<T>): Promise<T | undefined> {
         return new Promise<T | undefined>((resolve, reject) => {
-            const quickPick = this.monacoService.createQuickPick<MonacoQuickPickItem<T>>();
-            const wrapped = this.wrapQuickPick(quickPick);
+            const wrapped = this.createQuickPick<T>();
             wrapped.items = items;
 
             if (options) {
@@ -546,26 +556,28 @@ class MonacoQuickPick<T extends QuickPickItem> extends MonacoQuickInput implemen
         return this.wrapped.items.map(item => QuickPickSeparator.is(item) ? item : item.item);
     }
 
-    set items(itms: readonly (T | QuickPickSeparator)[]) {
+    set items(itemList: readonly (T | QuickPickSeparator)[]) {
         // We need to store and apply the currently selected active items.
         // Since monaco compares these items by reference equality, creating new wrapped items will unmark any active items.
         // Assigning the `activeItems` again will restore all active items even after the items array has changed.
         // See also the `findMonacoItemReferences` method.
         const active = this.activeItems;
-        this.wrapped.items = itms.map(item => QuickPickSeparator.is(item) ? item : new MonacoQuickPickItem<T>(item, this.keybindingRegistry));
-        this.activeItems = active;
+        this.wrapped.items = itemList.map(item => QuickPickSeparator.is(item) ? item : new MonacoQuickPickItem<T>(item, this.keybindingRegistry));
+        if (active.length !== 0) {
+            this.activeItems = active; // If this is done with an empty activeItems array, then it will undo first item focus on quick menus.
+        }
     }
 
-    set activeItems(itms: readonly T[]) {
-        this.wrapped.activeItems = this.findMonacoItemReferences(this.wrapped.items, itms);
+    set activeItems(itemList: readonly T[]) {
+        this.wrapped.activeItems = this.findMonacoItemReferences(this.wrapped.items, itemList);
     }
 
     get activeItems(): readonly (T)[] {
         return this.wrapped.activeItems.map(item => item.item);
     }
 
-    set selectedItems(itms: readonly T[]) {
-        this.wrapped.selectedItems = this.findMonacoItemReferences(this.wrapped.items, itms);
+    set selectedItems(itemList: readonly T[]) {
+        this.wrapped.selectedItems = this.findMonacoItemReferences(this.wrapped.items, itemList);
     }
 
     get selectedItems(): readonly (T)[] {

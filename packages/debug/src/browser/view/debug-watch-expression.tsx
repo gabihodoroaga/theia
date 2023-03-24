@@ -51,7 +51,7 @@ export class DebugWatchExpression extends ExpressionItem {
     }
 
     override render(): React.ReactNode {
-        return <div className='theia-debug-console-variable'>
+        return <div className='theia-debug-console-variable theia-debug-watch-expression'>
             <div className={TREE_NODE_SEGMENT_GROW_CLASS}>
                 <span title={this.type || this._expression} className='name'>{this._expression}: </span>
                 <span title={this._value} ref={this.setValueRef} className={this.isError ? 'watch-error' : ''}>{this._value}</span>
@@ -62,8 +62,9 @@ export class DebugWatchExpression extends ExpressionItem {
 
     async open(): Promise<void> {
         const input = new SingleTextInputDialog({
-            title: 'Edit Watch Expression',
-            initialValue: this.expression
+            title: nls.localizeByDefault('Edit Expression'),
+            initialValue: this.expression,
+            placeholder: nls.localizeByDefault('Expression to watch')
         });
         const newValue = await input.open();
         if (newValue !== undefined) {

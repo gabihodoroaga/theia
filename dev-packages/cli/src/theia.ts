@@ -26,6 +26,8 @@ import downloadPlugins from './download-plugins';
 import runTest from './run-test';
 import { LocalizationManager, extract } from '@theia/localization-manager';
 
+const { executablePath } = require('puppeteer');
+
 process.on('unhandledRejection', (reason, promise) => {
     throw reason;
 });
@@ -343,7 +345,12 @@ async function theiaCli(): Promise<void> {
                 'parallel': {
                     describe: 'Download in parallel',
                     boolean: true,
-                    default: false
+                    default: true
+                },
+                'rate-limit': {
+                    describe: 'Amount of maximum open-vsx requests per second',
+                    number: true,
+                    default: 15
                 },
                 'proxy-url': {
                     describe: 'Proxy URL'
@@ -520,7 +527,10 @@ async function theiaCli(): Promise<void> {
                     }),
                     launch: {
                         args: ['--no-sandbox'],
-                        devtools: testInspect
+                        // eslint-disable-next-line no-null/no-null
+                        defaultViewport: null, // view port can take available space instead of 800x600 default
+                        devtools: testInspect,
+                        executablePath: executablePath()
                     },
                     files: {
                         extension: testExtension,
